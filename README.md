@@ -243,7 +243,16 @@ uv run pytest          # tests + coverage gate (90%)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy            # strict
 uv run python -m app.evaluation --verbose   # score the detectors, see docs/evaluation.md
-uv run pre-commit install
+uv run pre-commit install   # runs ruff (with --fix), ruff format and mypy before every commit
+```
+
+CI runs the same three checks, so a commit that skips the hook fails there. If `pre-commit install`
+refuses with "Cowardly refusing to install hooks with `core.hooksPath` set" (a global hooks directory
+is configured), install it with the override cleared for that one command; the global hooks hand off
+to `.git/hooks`, so the repo hook still runs:
+
+```sh
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0= uv run pre-commit install
 ```
 
 Architecture notes: [docs/adr](docs/adr). Configuration: see `.env.example`.
