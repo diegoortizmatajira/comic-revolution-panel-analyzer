@@ -51,8 +51,33 @@
   panel it stretched ordinary panels on pages where frame detection fails and cost 15 points
   of page accuracy with refinement on.
   Pages whose frames are too broken for the lines to be found keep their banners and caption
-  strips. The remaining failures are tracked in issue 11. These cases are what the ML detector
-  is for.
+  strips. Projection v6 targets pages with a dark background, where black art reads as paper.
+  A framed strip whose art is split by black bands was cut into pieces; pieces side by side are
+  now rejoined when the union has long frame lines along its top and bottom and on at least one
+  end, and no full-height frame line crosses the gap between them (`FrameLines.encloses_as_one`).
+  A gap under 4% of the page width stays a gutter, and slanted pieces whose boxes overlap are only
+  joined to one already joined across a wide gap, otherwise two framed panels with a slanted
+  gutter would merge. Also on dark pages only, unclaimed space between an unframed panel and the
+  page edge is absorbed by that panel if it holds ink, is at least 4% of the page across, and the
+  other panels leave 85% of its extent clear. Applied to every page, that step took lettering
+  and caption zones that the labels deliberately keep outside the boxes and cost 6 points of page
+  accuracy, so it is not a general rule: on light paper the trim is reliable. Both steps are
+  limited to what the corpus shows: a perfectly straight, full-height edge on a piece inside a
+  frame still counts as a divider and blocks the rejoin.
+  What still fails, tracked in issue 11 (strict `xfail` in `tests/integration/test_fixture_pages.py`):
+  staggered frames over art that bleeds behind them (`blurred-001`); full-bleed art with inset
+  panels over its bottom edge (`blurred-003`); an L-shaped panel (`public_002`); slanted gutters
+  crossed by captions and art (`public_003`, `moon-mullings-003-09`); open frames with no gutter
+  (`moon-mullings-003-03`, `-16`); a narrow gutter holding 22% ink (`midnight-mistery-004-07`);
+  and captions or large lettering splitting a panel (`midnight-mistery-004-08`, `-14`). Several
+  share one cause: white balloons and caption areas look like gutters, so a valley cut that would
+  find the narrow gutters also splits other panels. Tried and not kept: cutting at any frame line
+  spanning 90% of the region (broke pages that were correct, because captions and art also carry
+  full-width lines), vertical frame-line cuts, a valley cut on the column profile, counting paper
+  enclosed by outlines as content, and letting a box claim ink across a neighbour's wall. These
+  cases are what the ML detector is for. A blurred copy of a page keeps its frame geometry but
+  not its ink statistics, so the blurred fixtures do not cover the dark-page cases; the synthetic
+  tests in `tests/unit/test_projection_detector.py` do.
 - **Reading order:** recursive XY-cut honouring `ltr`/`rtl`. `sequence_confidence`
   measures layout ambiguity only (share of panels that could not be cut cleanly);
   per-panel `confidence` measures detection quality.

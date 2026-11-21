@@ -164,16 +164,22 @@ a reader can fall back to showing the page. A single detected panel is returned 
 `method` names the detector that produced the result. Choose it with `PANELS_DETECTOR`:
 `projection` (default; gutter-based, works on colour), `classical` (contour-based), or the optional
 `ml` and `hybrid` detectors (see below). With `hybrid`, `method` is the one that answered that page.
-`projection` (version 5) also follows a slightly slanted gutter when no straight row or column is
+`projection` (version 6) also follows a slightly slanted gutter when no straight row or column is
 clean, and uses long straight frame lines to cut where there is no gutter at all and to set off
 title banners, which are returned as a first panel. Caption strips and balloons that sit between panels are shared between the panel
-above and the one below instead of being lost. Known limitations: panels with no gutter between them (art that bleeds into the next
-panel, open frames), title banners and caption strips on pages whose frames are too broken to find (the ML detector
+above and the one below instead of being lost. On a dark page it rejoins a framed panel that its own
+black art cut apart, and gives a panel that bleeds off the page the dark space between it and the page edge.
+Known limitations: panels with no gutter between them (art that bleeds into the next
+panel, staggered frames over bleeding art, open frames, full-bleed art with inset panels), L-shaped
+panels, title banners and caption strips on pages whose frames are too broken to find (the ML detector
 never returns titles),
 borderless panels on unevenly toned paper (a page where nothing could be cut is retried against
 the paper colour measured around each pixel, which handles stained paper but not every case), and dense pages where balloons cross
-gutters. Those pages return fewer, larger panels, or extra ones, and a warning when only one is
-found. See `docs/evaluation.md` for per-page numbers.
+gutters (white balloons and caption areas read as gutters, which also splits some panels). Those pages return fewer, larger panels,
+or extra ones, and a warning when only one is found. On light paper, ink between a panel and the page
+edge is treated as lettering that belongs to no panel, so it is not added to the panel. `hybrid` handles `public_003`
+(and the local `samples/003`). See `docs/evaluation.md` for per-page numbers and the committed pages that are
+known failures (`tests/integration/test_fixture_pages.py`).
 
 ### Edge snapping (optional)
 
