@@ -54,7 +54,7 @@ def assert_four_panels(body: dict[str, Any], direction: str = "ltr") -> None:
     assert [p["order"] for p in body["panels"]] == [1, 2, 3, 4]
     assert body["sequence_confidence"] == 1.0
     assert body["method"] == "projection"
-    assert body["version"] == "projection@7+xycut@4"
+    assert body["version"] == "projection@8+xycut@4"
     assert body["whole_page_fallback"] is False
     first = body["panels"][0]
     assert first["bbox"] == {"x": 40, "y": 40, "width": 340, "height": 540}
@@ -267,7 +267,7 @@ def test_hybrid_falls_back_to_the_ml_detector_and_reports_it(
             "/v1/panels/analyze/upload", files={"file": ("p.png", merged)}, headers=HEADERS
         ).json()
     assert body["method"] == "ml"
-    assert body["version"].startswith("hybrid@3[projection@7|ml@1:")
+    assert body["version"].startswith("hybrid@3[projection@8|ml@1:")
     assert body["version"].endswith("+xycut@4")
     assert [p["order"] for p in body["panels"]] == [1, 2, 3, 4]
     assert abs(body["panels"][0]["bbox"]["x"] - 40) <= 20

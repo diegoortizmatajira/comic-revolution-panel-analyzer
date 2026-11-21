@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from app.domain.models import BoundingBox, DetectedPanel, ReadingDirection
 from app.services.detection.frames import FrameLines
-from app.services.detection.projection import ProjectionPanelDetector, _Frames
+from app.services.detection.projection import ProjectionPanelDetector, _Frames, _has_band
 from app.services.image.decoder import ImageLimits, decode_image
 from app.services.ordering.xy_cut import XYCutOrdering
 
@@ -78,10 +78,11 @@ def test_ignores_specks_below_min_area() -> None:
     assert boxes(make_comic_page([(20, 20, 30, 30)])) == []
 
 
-def test_panels_with_no_gutter_stay_merged() -> None:
-    # Documented limitation: without a gutter there is nothing to cut along.
+def test_panels_touching_along_a_flat_frame_divider_are_split() -> None:
+    # No paper between them, but their two frames make a band of one flat colour down the full
+    # height, and a frame line runs along it: that is a divider, not an edge inside a panel.
     found = boxes(make_comic_page([(40, 40, 340, 500), (380, 40, 340, 500)]))
-    assert len(found) == 1
+    assert len(found) == 2
 
 
 def test_confidence_is_within_range() -> None:
@@ -354,3 +355,28 @@ def test_inset_layout_leaves_alone_an_inset_that_was_not_cut_apart() -> None:
     ]
     mask = np.ones((3057, 1988), dtype=bool)
     assert ProjectionPanelDetector._inset_layout(first, mask, _Frames(lines_011())) == []
+
+
+def test_cut_cols_wants_a_line_down_nearly_the_whole_height() -> None:
+    lines = FrameLines(
+        vertical=[(500, 0, 900), (300, 100, 400), (50, 0, 900)], height=1000, width=1000
+    )
+    assert lines.cut_cols((0, 1000, 0, 1000)) == [500]  # 300 is too short, 50 too near the side
+
+
+def test_framed_sides_counts_page_edges_and_frame_lines() -> None:
+    lines = FrameLines(horizontal=[(900, 0, 1000)], height=1000, width=1000)
+    assert lines.framed_sides((0, 900, 0, 1000)) == 4  # top, left, right are page edges
+    assert lines.framed_sides((100, 800, 100, 800)) == 0
+
+
+def test_has_band_finds_a_flat_colour_column_run_and_not_a_lone_line() -> None:
+    page = np.random.default_rng(2).integers(0, 255, (600, 1000, 3)).astype(np.uint8)
+    region = (0, 600, 0, 1000)
+    assert not _has_band(page, region, 500)
+    page[:, 490:515] = 255  # a white border between two panels
+    assert _has_band(page, region, 500)
+    noisy = np.random.default_rng(2).integers(0, 255, (600, 1000, 3)).astype(np.uint8)
+    noisy[:, 500] = 0  # one dark line inside art is not a band
+    assert not _has_band(noisy, region, 500)
+    assert not _has_band(None, region, 500)

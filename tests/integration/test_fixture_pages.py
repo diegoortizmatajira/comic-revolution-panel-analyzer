@@ -94,6 +94,7 @@ CORRECT_PAGES = [
     "moon-mullings-003-15",
     "moon-mullings-003-17",
     "blurred-002",
+    "blurred-001",
     "blurred-003",
 ]
 KNOWN_FAILURES = {
@@ -110,8 +111,6 @@ KNOWN_FAILURES = {
     "moon-mullings-003-09": "the two top panels touch through art (27% of the path between them "
     "is ink)",
     "moon-mullings-003-16": "open frames and overlapping balloons leave no clean gutter",
-    "blurred-001": "top art bleeds behind the framed panels and the middle-row frames are "
-    "staggered: no gutter, and a full-width frame line cannot be told from one through art",
 }
 
 

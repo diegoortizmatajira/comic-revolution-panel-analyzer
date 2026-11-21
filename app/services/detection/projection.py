@@ -45,6 +45,10 @@ _MIN_ABSORB = 0.04  # of the page: thinner unclaimed strips are margins or gutte
 _ABSORB_INK = 0.05  # ink share an unclaimed strip needs to be art that was trimmed away
 _MIN_PIECES = 2  # pieces an inset must have been cut into to be put back together
 _MIN_MAIN = 0.1  # of the page: the bleeding panel an inset layout leaves must be at least this big
+_BAND_REACH = 0.0225  # of the page width: how far from a divider line its band may start
+_BAND_TOLERANCE = 30  # colour distance within which a column counts as one flat colour
+_BAND_SHARE = 0.9  # share of a column's rows that must match its colour
+_BAND_MIN = 0.004  # of the page width: the narrowest band that counts as a gutter
 _MAX_FRAME_TRIES = 6  # frame lines tried per region, longest first
 
 
@@ -54,6 +58,7 @@ class _Frames:
 
     lines: FrameLines
     cuts: list[int] = field(default_factory=list)
+    page: NDArray[np.uint8] | None = None
 
 
 def _bleeds(frames: _Frames, region: _Region) -> bool:
@@ -184,6 +189,27 @@ def _region_of(panel: DetectedPanel) -> _Region:
     return (box.y, box.y + box.height, box.x, box.x + box.width)
 
 
+def _has_band(page: NDArray[np.uint8] | None, region: _Region, x: int) -> bool:
+    """True if a band of one flat colour runs down the region next to column ``x``.
+
+    Two panels with white borders are divided by a band of white however dark the art around
+    it; a line inside a panel has art on both sides and no such band.
+    """
+    if page is None:
+        return False
+    y0, y1, x0, x1 = region
+    reach = int(_BAND_REACH * page.shape[1])
+    lo, hi = max(x - reach, x0), min(x + reach, x1)
+    sub = page[y0:y1, lo:hi].astype(np.int16)
+    median = np.median(sub, axis=0)
+    flat = (np.abs(sub - median[None]).max(axis=2) <= _BAND_TOLERANCE).mean(axis=0) >= _BAND_SHARE
+    longest = run = 0
+    for column_is_flat in flat:
+        run = run + 1 if column_is_flat else 0
+        longest = max(longest, run)
+    return bool(longest >= max(4, _BAND_MIN * page.shape[1]))
+
+
 def _is_wide(region: _Region, page_width: int) -> bool:
     """A piece wide enough to be a line of lettering or a caption, not a speck."""
     return region[3] - region[2] >= 0.05 * page_width
@@ -191,7 +217,7 @@ def _is_wide(region: _Region, page_width: int) -> bool:
 
 class ProjectionPanelDetector:
     name = "projection"
-    version = "7"
+    version = "8"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -223,7 +249,7 @@ class ProjectionPanelDetector:
         self._banner_area_ratio = banner_area_ratio
 
     def detect(self, page: NDArray[np.uint8]) -> Detection:
-        frames = _Frames(FrameLines.find(page))
+        frames = _Frames(FrameLines.find(page), page=page)
         mask = self._content_mask(page)
         panels = self._detect_with(mask, frames, loose=False)
         if layout := self._inset_layout(panels, mask, frames):
@@ -232,7 +258,7 @@ class ProjectionPanelDetector:
             # Nothing was cut. On stained or unevenly toned paper the single page colour matches
             # only part of the page, so try the paper colour measured around each pixel.
             local = local_content_mask(page, self._tolerance, self._border_fraction)
-            retry = self._detect_with(local, _Frames(frames.lines), loose=True)
+            retry = self._detect_with(local, _Frames(frames.lines, page=page), loose=True)
             if len(retry) > len(panels):
                 panels = retry
         if estimate_background(page, self._border_fraction).mean() < _DARK_PAPER:
@@ -601,7 +627,29 @@ class ProjectionPanelDetector:
                     self._split(mask, (y0, cut, x0, x1), depth + 1, out, frames)
                     self._split(mask, (cut, y1, x0, x1), depth + 1, out, frames)
                     return
+            if big_enough and self._cut_at_column(mask, (y0, y1, x0, x1), depth, out, frames):
+                return
         out.append((y0, y1, x0, x1))
+
+    def _cut_at_column(
+        self, mask: Mask, region: _Region, depth: int, out: list[_Region], frames: _Frames
+    ) -> bool:
+        """Cut along a vertical frame line that divides two framed panels; True if it cut.
+
+        A line down the whole region is a divider only when a band of one flat colour runs beside
+        it (the white borders between two panels) and each side is a framed panel; a line inside
+        one panel has art on both sides and no such band.
+        """
+        y0, y1, x0, x1 = region
+        for col in frames.lines.cut_cols(region):
+            west, east = (y0, y1, x0, col), (y0, y1, col, x1)
+            if _has_band(frames.page, region, col) and all(
+                frames.lines.framed_sides(r) >= _FRAMED_SIDES for r in (west, east)
+            ):
+                self._split(mask, west, depth + 1, out, frames)
+                self._split(mask, east, depth + 1, out, frames)
+                return True
+        return False
 
     def _cut_pays_off(
         self, mask: Mask, region: _Region, cut: int, depth: int, frames: _Frames
@@ -613,7 +661,7 @@ class ProjectionPanelDetector:
         further (stacked panels with no gutter); a cut through one panel does neither.
         """
         y0, y1, x0, x1 = region
-        trial = _Frames(frames.lines, [*frames.cuts, cut])
+        trial = _Frames(frames.lines, [*frames.cuts, cut], frames.page)
         pieces: list[_Region] = []
         self._split(mask, (y0, cut, x0, x1), depth + 1, pieces, trial)
         self._split(mask, (cut, y1, x0, x1), depth + 1, pieces, trial)

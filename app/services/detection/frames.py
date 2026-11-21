@@ -82,6 +82,34 @@ class FrameLines:
                 found.append((cover, y))
         return [y for _, y in sorted(found, reverse=True)]
 
+    def cut_cols(self, region: _Region, min_cover: float = 0.85, margin: float = 0.15) -> list[int]:
+        """Columns of vertical lines that run along nearly the whole height of the region.
+
+        Only a line that spans the region from top to bottom can be a divider between two panels;
+        a shorter one is as likely to be an edge inside the art. Longest first.
+        """
+        y0, y1, x0, x1 = region
+        found: list[tuple[int, int]] = []
+        for x, a, b in self.vertical:
+            cover = min(b, y1) - max(a, y0)
+            inside = x0 + margin * (x1 - x0) < x < x1 - margin * (x1 - x0)
+            if inside and cover >= min_cover * (y1 - y0):
+                found.append((cover, x))
+        return [x for _, x in sorted(found, reverse=True)]
+
+    def framed_sides(self, region: _Region, tolerance: float = 0.02) -> int:
+        """Sides of the region on a frame line or on the page edge (0 to 4)."""
+        y0, y1, x0, x1 = region
+        tol_y, tol_x = tolerance * self.height, tolerance * self.width
+        edges = (
+            y0 <= tol_y,
+            y1 >= self.height - tol_y,
+            x0 <= tol_x,
+            x1 >= self.width - tol_x,
+        )
+        lines = self._line_sides(region, 0.4, tol_y, tol_x)
+        return sum(a or b for a, b in zip(lines, edges, strict=True))
+
     def touches_frame_row(
         self, region: _Region, min_cover: float = 0.25, tolerance: float = 0.02
     ) -> bool:
