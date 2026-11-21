@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from app.domain.models import ImageSize, ReadingDirection
+from app.domain.models import DetectedPanel, ImageSize, ReadingDirection
 from app.services.analyzer import PanelAnalyzer
 from app.services.detection.refine import EdgeSnapRefiner
 from app.services.image.decoder import DecodedImage
@@ -29,7 +29,7 @@ def balloon(page: NDArray[np.uint8], x0: int, y0: int, x1: int, y1: int) -> None
     ink(page, x1 - 3, y0, x1, y1)
 
 
-def bounds(panels: tuple) -> tuple[int, int, int, int]:
+def bounds(panels: tuple[DetectedPanel, ...]) -> tuple[int, int, int, int]:
     box = panels[0].bbox
     return box.x, box.y, box.right, box.bottom
 

@@ -98,8 +98,9 @@ class EdgeSnapRefiner:
         if found is None:
             return []
         low, high = self.slant_angles
-        lines = []
-        for x0, y0, x1, y1 in np.asarray(found).reshape(-1, 4).tolist():
+        lines: list[tuple[int, int, int, int, bool]] = []
+        for row in np.asarray(found).reshape(-1, 4).tolist():
+            x0, y0, x1, y1 = (int(v) for v in row)
             angle = abs(np.degrees(np.arctan2(y1 - y0, x1 - x0)))
             angle = min(angle, 180 - angle)  # 0 = horizontal, 90 = vertical
             if low <= angle <= high:

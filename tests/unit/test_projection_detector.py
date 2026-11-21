@@ -120,8 +120,8 @@ def wobbly_gutter_page(*, bridged: bool) -> np.ndarray:
         page[y, right : width - 20] = (60, 140, 200)
     page[:20] = page[-20:] = MAROON
     if bridged:  # art from both panels touches across the gutter for a few rows
-        for y in range(300, 310):
-            page[y, int(centre[y]) - 6 : int(centre[y]) + 6] = (20, 20, 20)
+        for bridge in range(300, 310):
+            page[bridge, int(centre[bridge]) - 6 : int(centre[bridge]) + 6] = (20, 20, 20)
     return page
 
 
@@ -232,7 +232,9 @@ def dark_page() -> np.ndarray:
     cv2.rectangle(page, (40, 800), (760, 1150), (200, 40, 80), 6)
     # slanted edges, like art: a straight full-height edge would read as a panel divider
     cv2.fillPoly(page, [np.array([[52, 812], [240, 812], [200, 1138], [52, 1138]])], (60, 140, 200))
-    cv2.fillPoly(page, [np.array([[470, 812], [748, 812], [748, 1138], [520, 1138]])], (90, 180, 90))
+    cv2.fillPoly(
+        page, [np.array([[470, 812], [748, 812], [748, 1138], [520, 1138]])], (90, 180, 90)
+    )
     return page
 
 

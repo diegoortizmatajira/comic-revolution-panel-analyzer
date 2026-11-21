@@ -85,7 +85,8 @@ def _free_strip(
         beyond = [
             (o.x + o.width) if horizontal else (o.y + o.height)
             for o in others
-            if _spans(o, lo, hi, horizontal) and ((o.x + o.width) if horizontal else (o.y + o.height)) <= edge
+            if _spans(o, lo, hi, horizontal)
+            and ((o.x + o.width) if horizontal else (o.y + o.height)) <= edge
         ]
         start, end = max(beyond, default=reach), edge
         if start >= end:
@@ -106,12 +107,16 @@ def _free_strip(
 def _reaches_page_edge(side: str, free: tuple[int, int, int, int], page: tuple[int, int]) -> bool:
     """True if the free strip runs out to the page edge: space between panels is a gutter."""
     fx0, fy0, fx1, fy1 = free
-    return {"left": fx0 <= 0, "right": fx1 >= page[0], "top": fy0 <= 0, "bottom": fy1 >= page[1]}[side]
+    return {"left": fx0 <= 0, "right": fx1 >= page[0], "top": fy0 <= 0, "bottom": fy1 >= page[1]}[
+        side
+    ]
 
 
 def _spans(other: BoundingBox, lo: int, hi: int, horizontal: bool) -> bool:
     """True if ``other`` overlaps the interval lo..hi along the axis the strip runs on."""
-    o_lo, o_hi = (other.y, other.y + other.height) if horizontal else (other.x, other.x + other.width)
+    o_lo, o_hi = (
+        (other.y, other.y + other.height) if horizontal else (other.x, other.x + other.width)
+    )
     return min(hi, o_hi) - max(lo, o_lo) > _ALIGNED * (hi - lo)
 
 
@@ -130,7 +135,10 @@ def _worth_absorbing(
     horizontal = side in ("left", "right")
     lo, hi = (fy0, fy1) if horizontal else (fx0, fx1)
     blocked = sorted(
-        (max(lo, (o.y if horizontal else o.x)), min(hi, (o.y + o.height) if horizontal else (o.x + o.width)))
+        (
+            max(lo, (o.y if horizontal else o.x)),
+            min(hi, (o.y + o.height) if horizontal else (o.x + o.width)),
+        )
         for o in others
         if o.x < fx1 and fx0 < o.x + o.width and o.y < fy1 and fy0 < o.y + o.height
     )
