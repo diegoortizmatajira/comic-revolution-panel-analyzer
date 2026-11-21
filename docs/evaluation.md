@@ -52,8 +52,8 @@ far are in [ADR 0002](adr/0002-optional-ml-detector.md).
 `--refine-edges` applies the edge-snapping refiner after each detector. The labels in the corpus are
 frame-tight: balloons and captions that hang outside a panel's frame are not part of the label.
 The refiner's job is the opposite, to keep those balloons inside the box, so on open-frame pages it
-moves boxes away from the labels and strict scores drop. With `projection@7` on the committed
-corpus (37 pages: 26 labelled, 11 synthetic): f1@50 0.920 either way, f1@75 0.794 to 0.766;
+moves boxes away from the labels and strict scores drop. With `projection@8` on the committed
+corpus (37 pages: 26 labelled, 11 synthetic): f1@50 0.929 either way, f1@75 0.822 to 0.793;
 `classical` is unchanged (f1@50 0.502, f1@75 0.411). Several pages (for example `moon-mullings-003-10`,
 `-05`, `-14` and `-17`, and `western_fighters_8`) grow by 140 to 180 px to include balloons above the frame;
 `midnight-mistery-004-14`, whose caption boxes are already split off as extra panels, grows by 470 px.

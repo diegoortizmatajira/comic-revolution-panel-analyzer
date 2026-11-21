@@ -87,6 +87,6 @@ borders, bleeding art), so it is not a reproduction of the page and can be commi
 
 | File | What it is | Why it is useful |
 |---|---|---|
-| `blurred-001.webp` | six panels, top-left art bleeding behind framed panels | staggered frames on the middle row, no gutter (#11) |
+| `blurred-001.webp` | six panels, top-left art bleeding behind framed panels | staggered frames on the middle row, no paper gutter; projection splits it along the white borders |
 | `blurred-002.webp` | four panels under a curved black outline | slanted gutters, red-framed strip, dark page (projection gets it right) |
 | `blurred-003.webp` | full-bleed art with two white-framed insets | bleed with insets over its bottom edge, no gutter; the page-sized-panel case (projection gets it right) |

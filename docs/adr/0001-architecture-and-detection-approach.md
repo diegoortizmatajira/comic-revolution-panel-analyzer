@@ -74,8 +74,17 @@
   that was cut into two or more pieces is put back together, and a slice of the art cut off beside
   it rejoins the art. Insets drawn on other frame lines added extra panels on `009` and
   `blurred-001` when every inset was used, hence that rule.
+  Projection v8 cuts staggered rows of white-bordered panels over art that bleeds behind them
+  (`009`, `blurred-001`): the middle row's top edge was already cut at its full-width frame line,
+  but it did not pay off, because nothing split the rows it left. A vertical frame line that
+  runs down nearly the whole region (85%, away from the sides) now divides it when each side is
+  framed on at least three sides, counting page edges, and a band of one flat colour at least
+  0.4% of the page width runs beside it (`_has_band`). The band is what separates a divider
+  from an edge inside art: it is 11 to 28 px wide at the real dividers and absent at every
+  interior line tried. With the 85% line and the framed-sides test alone, 22 corpus pages had a
+  candidate line, single panels were split, and page accuracy fell from 0.66 to 0.50.
   What still fails, tracked in issue 11 (strict `xfail` in `tests/integration/test_fixture_pages.py`):
-  staggered frames over art that bleeds behind them (`blurred-001`); an L-shaped panel (`public_002`); slanted gutters
+  an L-shaped panel (`public_002`); slanted gutters
   crossed by captions and art (`public_003`, `moon-mullings-003-09`); open frames with no gutter
   (`moon-mullings-003-03`, `-16`); a narrow gutter holding 22% ink (`midnight-mistery-004-07`);
   and captions or large lettering splitting a panel (`midnight-mistery-004-08`, `-14`). Several
