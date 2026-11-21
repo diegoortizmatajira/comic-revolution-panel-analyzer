@@ -26,6 +26,7 @@ was verified beyond what the cards say):
 | [Inkwell panel detector](https://huggingface.co/cedarrapidsboy/inkwell-panel-models) | AGPL-3.0, including network use | ~3,800 annotated pages; origin and licence not stated | YOLOv8-nano, 640 px, ships `best.onnx`, reported mAP50 0.977 |
 | [mosesb YOLOv12x](https://huggingface.co/mosesb/best-comic-panel-detection) | card says Apache-2.0 | custom Roboflow set; licence not stated | extra-large model; the Ultralytics code behind it is AGPL, so the claim is doubtful |
 | [Oliverdsfdsf YOLO26n-seg](https://huggingface.co/Oliverdsfdsf/comic-panels-text-detect) | card says Apache-2.0 | not stated | targets comics, manga and manhwa; no metrics |
+| [kernald/panel-detection](https://git.enoent.fr/kernald/panel-detection/releases) `model-v0.1` | repo MIT; weights' licence not stated | not stated; its benchmark names Pepper&Carrot, Mini Fantasy Theater, Golden Age, Krazy Kat, Little Nemo | D-FINE-L, 1024 px, `detector.onnx` (119 MiB) plus a reading-order `orderer.onnx` we do not need |
 | [DeepPanel](https://github.com/smather/DeepPanel) | code Apache-2.0, weights unlicensed | private, 550 pages | TensorFlow U-Net |
 
 This repository is MIT. Shipping or requiring an AGPL model would change what hosting the service
@@ -64,6 +65,32 @@ comparable.
   overlap by a few pixels and no clean cut exists. The XY-cut now has a **gap tolerance** of 8% of
   the group's extent (ordering version 2). Against ML boxes the result rises to 19 of 23 and plateaus
   from 8% to 12%; `projection` is unaffected.
+
+### A second model: D-FINE (`dfine` output format)
+
+Measured on 2026-11-21 with `projection@9` on the 37-page corpus (26 labelled real pages, 11
+generated, 182 panels), with the `kernald/panel-detection` `model-v0.1` `detector.onnx`
+(`1:34b4e048931a`), **for local measurement only: it was not committed or distributed**. It runs with
+`PANELS_ML_OUTPUT_FORMAT=dfine`, `PANELS_ML_INPUT_SIZE=1024`; the page is stretched to the square
+(letterboxing gave duplicate, shifted boxes) and `orig_target_sizes` is `[width, height]`. Inkwell
+was re-measured on the same corpus and code (`1:f240e1296efd`, threshold 0.25; D-FINE 0.5).
+
+| Detector | Inkwell f1@50 | Inkwell f1@75 | D-FINE f1@50 | D-FINE f1@75 |
+|---|---|---|---|---|
+| `projection` | 0.94 | 0.85 | 0.94 | 0.85 |
+| `ml` | 0.96 | 0.83 | 0.87 | 0.79 |
+| `hybrid` | 0.96 | 0.90 | 0.96 | 0.93 |
+
+Recall@50 of `ml` alone is 0.95 for Inkwell and 0.81 for D-FINE (worst on `borderless` pages and
+`balloons-outside-frame`); `page_acc` of `hybrid` is 0.78 for both, the same as `projection`.
+
+- **Alone, Inkwell is clearly better**; D-FINE misses more panels but its boxes are tighter when it
+  finds one. Thresholds from 0.2 to 0.6 did not change that (`ml` f1@50 0.84 to 0.88).
+- **As the `hybrid` partner, D-FINE is slightly ahead** on f1@75 (0.93 against 0.90), because
+  `hybrid` only uses the model where `projection` looks wrong or the two agree. Three points on 37
+  pages is not decisive.
+- The same contamination and licence caveats as Inkwell apply, and the D-FINE weights' licence is
+  not stated at all.
 
 ### Hybrid policy
 
@@ -113,5 +140,6 @@ there, and 0.7 changes nothing, so the choice is fragile. Revisit them when the 
   service others use is a different matter; read its licence and decide before doing so.
 - **Small corpus.** 23 real pages, all western comics, 15 of them from two issues.
 - The model must be YOLO-style single-class (or multi-class with `PANELS_ML_PANEL_CLASS`) and
-  take a square input; `PANELS_ML_OUTPUT_FORMAT=end2end` selects the `(N, 6)` NMS-free layout. Other
-  architectures need another decoder.
+  take a square input; `PANELS_ML_OUTPUT_FORMAT=end2end` selects the `(N, 6)` NMS-free layout, and
+  `dfine` the D-FINE layout (`images` + `orig_target_sizes` in, `labels`/`boxes`/`scores` out, page
+  stretched to the square). Other architectures need another decoder.

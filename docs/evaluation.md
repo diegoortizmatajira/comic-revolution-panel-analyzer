@@ -44,6 +44,9 @@ instead of being averaged away.
 uv run python -m app.evaluation --corpus tests/fixtures --ml-model /path/to/panels.onnx --verbose
 ```
 
+A model that is not a 640 px YOLOv8 export needs `--ml-input-size` and `--ml-output-format`
+(`yolov8`, `end2end` or `dfine`), and a threshold fitting it (`--ml-confidence`).
+
 Keep the weights outside the repository (`/models/` is git-ignored). Results for the model tried so
 far are in [ADR 0002](adr/0002-optional-ml-detector.md).
 

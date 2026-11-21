@@ -215,7 +215,9 @@ docs/evaluation.md for the labels it is scored against.
 
 ### Optional ML detector
 
-The `ml` and `hybrid` detectors run a YOLO-style ONNX panel model. **No weights are included**:
+The `ml` and `hybrid` detectors run an ONNX panel model: YOLO-style (`yolov8`, `end2end`) or D-FINE (`dfine`, e.g. the
+`detector.onnx` of kernald/panel-detection with `PANELS_ML_OUTPUT_FORMAT=dfine` and
+`PANELS_ML_INPUT_SIZE=1024`; its `orderer.onnx` is not needed). **No weights are included**:
 you supply a model you are allowed to use (its licence is yours to check, see
 [ADR 0002](docs/adr/0002-optional-ml-detector.md)).
 
