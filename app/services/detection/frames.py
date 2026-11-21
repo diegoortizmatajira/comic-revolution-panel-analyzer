@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 _Region = tuple[int, int, int, int]  # y0, y1, x0, x1 (end-exclusive)
+_THIN_GUTTER = 0.04  # of the page width: narrower gaps between pieces are gutters, not dark art
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +92,47 @@ class FrameLines:
             and min(b, x1) - max(a, x0) >= min_cover * (x1 - x0)
             for y, a, b in self.horizontal
         )
+
+    def encloses_as_one(
+        self, left: _Region, right: _Region, *, joined: bool = False, tolerance: float = 0.02
+    ) -> bool:
+        """True if two side-by-side pieces sit inside one frame with no frame line between them.
+
+        The union has long frame lines along its top and bottom and a frame line on at least one
+        end, and no vertical frame line crosses the gap between the pieces. The gap is wide
+        (``joined`` also allows a piece that overlaps one already joined). Dark art inside a
+        panel on a dark page reads as paper and cuts the panel into such pieces.
+        """
+        y0, y1 = min(left[0], right[0]), max(left[1], right[1])
+        x0, x1 = min(left[2], right[2]), max(left[3], right[3])
+        tol_y, tol_x = tolerance * self.height, tolerance * self.width
+        if not (y1 - y0 and x1 - x0):
+            return False
+        overlap = min(left[1], right[1]) - max(left[0], right[0])
+        if overlap < 0.9 * min(left[1] - left[0], right[1] - right[0]):
+            return False
+
+        def spans(at: int) -> bool:
+            return any(
+                abs(y - at) <= tol_y and min(b, x1) - max(a, x0) >= 0.9 * (x1 - x0)
+                for y, a, b in self.horizontal
+            )
+
+        def vertical(at_lo: float, at_hi: float, cover: float) -> bool:
+            return any(
+                at_lo <= x <= at_hi and min(b, y1) - max(a, y0) >= cover * (y1 - y0)
+                for x, a, b in self.vertical
+            )
+
+        gap_lo, gap_hi = min(left[3], right[3]) - tol_x, max(left[2], right[2]) + tol_x
+        gap = max(left[2], right[2]) - min(left[3], right[3])
+        if gap <= _THIN_GUTTER * self.width and not (joined and gap <= 0):
+            # A thin gap is a real gutter between two framed panels, and so is a slanted one whose
+            # boxes overlap. Only a piece touching one already joined across a wide gap is part
+            # of the same panel.
+            return False
+        end = vertical(x0 - tol_x, x0 + tol_x, 0.4) or vertical(x1 - tol_x, x1 + tol_x, 0.4)
+        return spans(y0) and spans(y1) and end and not vertical(gap_lo, gap_hi, 0.9)
 
     def sides(self, region: _Region, min_cover: float = 0.4, tolerance: float = 0.02) -> int:
         """How many of the region's four sides lie on a frame line (0 to 4)."""

@@ -24,7 +24,11 @@ import cv2
 import numpy as np
 
 from app.domain.models import BoundingBox, DetectedPanel, Detection
-from app.services.detection.content import content_mask, local_content_mask
+from app.services.detection.content import (
+    content_mask,
+    estimate_background,
+    local_content_mask,
+)
 from app.services.detection.frames import FrameLines
 
 if TYPE_CHECKING:
@@ -33,6 +37,12 @@ if TYPE_CHECKING:
     Mask = NDArray[np.bool_]
 
 _Region = tuple[int, int, int, int]  # y0, y1, x0, x1 (end-exclusive)
+_ALIGNED = 0.2  # share of a panel's side another panel must overlap to be in the way
+_MATCH = 0.85  # share of the panel's extent the free strip must keep clear to count as matching it
+_DARK_PAPER = 60  # mean page-edge colour below this: a dark page, where black art reads as margin
+_FRAMED_SIDES = 3  # frame lines on this many sides: the panel has its own edges, keep them
+_MIN_ABSORB = 0.04  # of the page: thinner unclaimed strips are margins or gutters
+_ABSORB_INK = 0.05  # ink share an unclaimed strip needs to be art that was trimmed away
 _MAX_FRAME_TRIES = 6  # frame lines tried per region, longest first
 
 
@@ -57,6 +67,81 @@ def _bleeds(frames: _Frames, region: _Region) -> bool:
     return sum(edges) >= 3
 
 
+def _free_strip(
+    side: str, box: tuple[int, int, int, int], others: list[BoundingBox], page: tuple[int, int]
+) -> tuple[int, int, int, int] | None:
+    """The space between a panel's side and the nearest panel (or page edge) beyond it.
+
+    Returned as (x0, y0, x1, y1); it spans the panel's extent along that side, cut short where
+    another panel intrudes, and is None when no space is left.
+    """
+    x0, y0, x1, y1 = box
+    width, height = page
+    horizontal = side in ("left", "right")
+    lo, hi = (y0, y1) if horizontal else (x0, x1)
+    reach = (0 if side == "left" else width) if horizontal else (0 if side == "top" else height)
+    if side in ("left", "top"):
+        edge = x0 if horizontal else y0
+        beyond = [
+            (o.x + o.width) if horizontal else (o.y + o.height)
+            for o in others
+            if _spans(o, lo, hi, horizontal) and ((o.x + o.width) if horizontal else (o.y + o.height)) <= edge
+        ]
+        start, end = max(beyond, default=reach), edge
+        if start >= end:
+            return None
+    else:
+        edge = x1 if horizontal else y1
+        beyond = [
+            o.x if horizontal else o.y
+            for o in others
+            if _spans(o, lo, hi, horizontal) and (o.x if horizontal else o.y) >= edge
+        ]
+        start, end = edge, min(beyond, default=reach)
+        if start >= end:
+            return None
+    return (start, y0, end, y1) if horizontal else (x0, start, x1, end)
+
+
+def _reaches_page_edge(side: str, free: tuple[int, int, int, int], page: tuple[int, int]) -> bool:
+    """True if the free strip runs out to the page edge: space between panels is a gutter."""
+    fx0, fy0, fx1, fy1 = free
+    return {"left": fx0 <= 0, "right": fx1 >= page[0], "top": fy0 <= 0, "bottom": fy1 >= page[1]}[side]
+
+
+def _spans(other: BoundingBox, lo: int, hi: int, horizontal: bool) -> bool:
+    """True if ``other`` overlaps the interval lo..hi along the axis the strip runs on."""
+    o_lo, o_hi = (other.y, other.y + other.height) if horizontal else (other.x, other.x + other.width)
+    return min(hi, o_hi) - max(lo, o_lo) > _ALIGNED * (hi - lo)
+
+
+def _worth_absorbing(
+    side: str,
+    free: tuple[int, int, int, int],
+    others: list[BoundingBox],
+    mask: Mask,
+) -> bool:
+    fx0, fy0, fx1, fy1 = free
+    height, width = mask.shape
+    thickness = (fx1 - fx0) if side in ("left", "right") else (fy1 - fy0)
+    page_extent = width if side in ("left", "right") else height
+    if thickness < _MIN_ABSORB * page_extent:
+        return False  # a thin strip is a margin or a gutter
+    horizontal = side in ("left", "right")
+    lo, hi = (fy0, fy1) if horizontal else (fx0, fx1)
+    blocked = sorted(
+        (max(lo, (o.y if horizontal else o.x)), min(hi, (o.y + o.height) if horizontal else (o.x + o.width)))
+        for o in others
+        if o.x < fx1 and fx0 < o.x + o.width and o.y < fy1 and fy0 < o.y + o.height
+    )
+    longest, cursor = 0, lo
+    for b0, b1 in blocked:
+        longest, cursor = max(longest, b0 - cursor), max(cursor, b1)
+    if max(longest, hi - cursor) < _MATCH * (hi - lo):
+        return False  # other panels take too much of it: it is not the space of this panel
+    return float(mask[fy0:fy1, fx0:fx1].mean()) >= _ABSORB_INK
+
+
 def _is_wide(region: _Region, page_width: int) -> bool:
     """A piece wide enough to be a line of lettering or a caption, not a speck."""
     return region[3] - region[2] >= 0.05 * page_width
@@ -64,7 +149,7 @@ def _is_wide(region: _Region, page_width: int) -> bool:
 
 class ProjectionPanelDetector:
     name = "projection"
-    version = "5"
+    version = "6"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -106,7 +191,45 @@ class ProjectionPanelDetector:
             retry = self._detect_with(local, _Frames(frames.lines), loose=True)
             if len(retry) > len(panels):
                 panels = retry
+        if estimate_background(page, self._border_fraction).mean() < _DARK_PAPER:
+            panels = self._absorb_unclaimed(panels, mask, frames.lines)
         return Detection(panels=tuple(panels), method=self.name)
+
+    @staticmethod
+    def _absorb_unclaimed(
+        panels: list[DetectedPanel], mask: Mask, lines: FrameLines
+    ) -> list[DetectedPanel]:
+        """Hand ink that no panel claims to the panel it is aligned with.
+
+        Only used on a dark page, where art that is dark reads as margin and is trimmed off a
+        panel's side (on light paper the trim is reliable, and unclaimed ink is lettering that
+        belongs to no panel). Unclaimed space between a panel and the page edge is taken back by
+        that panel when it holds ink, is thick enough not to be a margin, and its extent along
+        the shared side matches the panel's (same height beside it, same width above or below).
+        A panel with a frame of its own is left alone.
+        """
+        height, width = mask.shape
+        result = list(panels)
+        for i, panel in enumerate(result):
+            box = panel.bbox
+            others = [p.bbox for j, p in enumerate(result) if j != i]
+            x0, y0, x1, y1 = box.x, box.y, box.x + box.width, box.y + box.height
+            if lines.sides((y0, y1, x0, x1)) >= _FRAMED_SIDES:
+                continue
+            for side in ("left", "right", "top", "bottom"):
+                free = _free_strip(side, (x0, y0, x1, y1), others, (width, height))
+                if (
+                    free is None
+                    or not _reaches_page_edge(side, free, (width, height))
+                    or not _worth_absorbing(side, free, others, mask)
+                ):
+                    continue
+                fx0, fy0, fx1, fy1 = free
+                x0, y0, x1, y1 = min(x0, fx0), min(y0, fy0), max(x1, fx1), max(y1, fy1)
+            result[i] = DetectedPanel(
+                bbox=BoundingBox(x0, y0, x1 - x0, y1 - y0), confidence=panel.confidence
+            )
+        return result
 
     def _detect_with(self, mask: Mask, frames: _Frames, *, loose: bool) -> list[DetectedPanel]:
         """Panels of one pass. ``loose`` also gathers small lettering pieces into strips."""
@@ -128,6 +251,7 @@ class ProjectionPanelDetector:
                 kept, strips = self._gather_title(
                     kept, strips, regions, frames, mask.shape, banner_area
                 )
+        kept = self._join_framed_pieces(kept, frames.lines)
         kept = self._attach_strips(kept, strips, 0.02 * height, banner_area, loose=loose)
         if loose:
             kept = self._snap_to_frame_lines(kept, frames.lines, 0.06 * height)
@@ -139,6 +263,28 @@ class ProjectionPanelDetector:
             )
             for y0, y1, x0, x1 in kept
         ]
+
+    @staticmethod
+    def _join_framed_pieces(kept: list[_Region], lines: FrameLines) -> list[_Region]:
+        """Rejoin pieces of one framed panel that dark art cut apart (see ``encloses_as_one``)."""
+        result = sorted(kept, key=lambda r: (r[2], r[0]))
+        joined: set[_Region] = set()
+        merged = True
+        while merged:
+            merged = False
+            for i, a in enumerate(result):
+                for b in result[i + 1 :]:
+                    if lines.encloses_as_one(a, b, joined=a in joined or b in joined):
+                        result.remove(a)
+                        result.remove(b)
+                        union = (min(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), max(a[3], b[3]))
+                        result.append(union)
+                        joined.add(union)
+                        merged = True
+                        break
+                if merged:
+                    break
+        return result
 
     @staticmethod
     def _attach_strips(

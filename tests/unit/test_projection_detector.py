@@ -220,3 +220,50 @@ def test_a_large_gap_or_a_panel_beside_is_left_alone() -> None:
     above, far, beside = (100, 400, 50, 450), (700, 900, 50, 450), (460, 800, 460, 860)
     panels = [above, far, beside]
     assert ProjectionPanelDetector._grow_into_gap_above(panels, 80) == panels
+
+
+def dark_page() -> np.ndarray:
+    """A black page: art bleeding off the top and right (its left part as dark as the page), and
+    a framed strip of art blocks separated by black bands wider than a gutter."""
+    page = np.zeros((1200, 800, 3), dtype=np.uint8)
+    page[0:500, 300:800] = (200, 120, 60)
+    for x in range(0, 300, 20):  # streaks of detail in the dark left part
+        page[0:500, x : x + 4] = (110, 110, 120)
+    cv2.rectangle(page, (40, 800), (760, 1150), (200, 40, 80), 6)
+    # slanted edges, like art: a straight full-height edge would read as a panel divider
+    cv2.fillPoly(page, [np.array([[52, 812], [240, 812], [200, 1138], [52, 1138]])], (60, 140, 200))
+    cv2.fillPoly(page, [np.array([[470, 812], [748, 812], [748, 1138], [520, 1138]])], (90, 180, 90))
+    return page
+
+
+def test_dark_art_inside_a_frame_does_not_split_the_panel() -> None:
+    strip = [b for b in boxes(dark_page()) if b[1] >= 800]
+    assert len(strip) == 1  # black bands between the art read as gutters, the frame says one panel
+    x, _, w, _ = strip[0]
+    assert x <= 52
+    assert x + w >= 748
+
+
+def test_dark_page_art_runs_to_the_page_edge_it_bleeds_towards() -> None:
+    top = min(boxes(dark_page()), key=lambda b: b[1])
+    assert top[0] == 0  # the black left part of the art is not margin
+    assert top[0] + top[2] == 800
+
+
+def test_light_page_margin_beside_bleeding_art_is_kept() -> None:
+    page = np.full((1200, 800, 3), 255, dtype=np.uint8)
+    page[0:500, 300:800] = (200, 120, 60)
+    for x in range(0, 300, 20):  # lettering-like marks on paper that belong to no panel
+        page[100:400, x : x + 4] = (110, 110, 120)
+    page[700:1150, 40:760] = (60, 140, 200)
+    top = min(boxes(page), key=lambda b: b[1])
+    assert top[0] >= 100  # on paper the margin is real: unclaimed ink is not folded into a panel
+
+
+def test_a_thin_gap_between_framed_pieces_is_still_a_gutter() -> None:
+    page = np.zeros((1200, 800, 3), dtype=np.uint8)
+    cv2.rectangle(page, (40, 100), (760, 600), (200, 40, 80), 6)
+    page[112:588, 52:380] = (60, 140, 200)
+    page[112:588, 400:748] = (90, 180, 90)  # a 20px gap, 2.5% of the page width
+    pieces = [b for b in boxes(page) if b[1] < 700]
+    assert len(pieces) == 2
