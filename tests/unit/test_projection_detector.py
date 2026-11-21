@@ -3,9 +3,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from app.domain.models import ReadingDirection
+from app.domain.models import BoundingBox, DetectedPanel, ReadingDirection
 from app.services.detection.frames import FrameLines
-from app.services.detection.projection import ProjectionPanelDetector
+from app.services.detection.projection import ProjectionPanelDetector, _Frames
 from app.services.image.decoder import ImageLimits, decode_image
 from app.services.ordering.xy_cut import XYCutOrdering
 
@@ -269,3 +269,88 @@ def test_a_thin_gap_between_framed_pieces_is_still_a_gutter() -> None:
     page[112:588, 400:748] = (90, 180, 90)  # a 20px gap, 2.5% of the page width
     pieces = [b for b in boxes(page) if b[1] < 700]
     assert len(pieces) == 2
+
+
+def test_inset_frames_finds_framed_rectangles_that_run_off_the_page() -> None:
+    # Frame lines measured on the blurred-003 fixture: two white-framed insets over the bottom edge
+    lines = FrameLines(
+        horizontal=[(1945, 111, 515), (2197, 790, 1574), (2916, 932, 1987)],
+        vertical=[
+            (81, 1976, 2687),
+            (106, 1960, 3056),
+            (686, 2564, 3056),
+            (709, 2683, 3056),
+            (761, 2178, 2929),
+            (785, 2313, 2903),
+        ],
+        height=3057,
+        width=1988,
+    )
+    left, right = sorted(lines.inset_frames())
+    assert left == (1945, 3057, 106, 686)  # top, left and right lines; the page edge closes it
+    assert right == (2197, 2916, 785, 1988)  # top, left and bottom lines; the page edge closes it
+
+
+def test_inset_frames_ignores_a_rectangle_with_only_two_frame_sides() -> None:
+    lines = FrameLines(
+        horizontal=[(1000, 100, 700)], vertical=[(100, 1000, 1900)], height=2000, width=1000
+    )
+    assert lines.inset_frames() == []
+
+
+def lines_011() -> FrameLines:
+    """Frame lines measured on a full-bleed page with two framed insets over its bottom edge."""
+    return FrameLines(
+        horizontal=[
+            (1933, 75, 715),
+            (1961, 109, 678),
+            (2200, 787, 1987),
+            (2872, 254, 519),
+            (2903, 787, 1987),
+            (2928, 761, 1987),
+        ],
+        vertical=[
+            (80, 2055, 3056),
+            (111, 1967, 3056),
+            (683, 1962, 3056),
+            (709, 1927, 3056),
+            (760, 2171, 2927),
+            (789, 2248, 2905),
+        ],
+        height=3057,
+        width=1988,
+    )
+
+
+def panel_at(x: int, y: int, w: int, h: int) -> DetectedPanel:
+    return DetectedPanel(bbox=BoundingBox(x=x, y=y, width=w, height=h), confidence=1.0)
+
+
+def test_inset_cut_into_pieces_is_one_panel_and_the_art_slice_beside_it_rejoins() -> None:
+    # What the first pass returns: the art, the left inset cut in two at its top frame line, a
+    # slice of the art cut off at that line, and the right inset.
+    first = [
+        panel_at(0, 0, 1988, 1933),
+        panel_at(114, 1962, 531, 238),
+        panel_at(113, 2200, 566, 664),
+        panel_at(715, 1933, 1273, 239),
+        panel_at(790, 2203, 1198, 728),
+    ]
+    mask = np.ones((3057, 1988), dtype=bool)
+    layout = ProjectionPanelDetector._inset_layout(first, mask, _Frames(lines_011()))
+    found = sorted((p.bbox.x, p.bbox.y, p.bbox.width, p.bbox.height) for p in layout)
+    assert len(found) == 3
+    assert found[0] == (0, 0, 1988, 2172)  # the art took its slice back
+    assert found[1][0] == 111  # the left inset is whole again, down to the page's lower part
+    assert found[1][1] <= 1962
+    assert found[1][1] + found[1][3] >= 2860
+
+
+def test_inset_layout_leaves_alone_an_inset_that_was_not_cut_apart() -> None:
+    first = [
+        panel_at(0, 0, 1988, 1933),
+        panel_at(113, 1962, 566, 902),
+        panel_at(790, 2203, 1198, 728),
+    ]
+    mask = np.ones((3057, 1988), dtype=bool)
+    assert ProjectionPanelDetector._inset_layout(first, mask, _Frames(lines_011())) == []

@@ -43,6 +43,8 @@ _DARK_PAPER = 60  # mean page-edge colour below this: a dark page, where black a
 _FRAMED_SIDES = 3  # frame lines on this many sides: the panel has its own edges, keep them
 _MIN_ABSORB = 0.04  # of the page: thinner unclaimed strips are margins or gutters
 _ABSORB_INK = 0.05  # ink share an unclaimed strip needs to be art that was trimmed away
+_MIN_PIECES = 2  # pieces an inset must have been cut into to be put back together
+_MIN_MAIN = 0.1  # of the page: the bleeding panel an inset layout leaves must be at least this big
 _MAX_FRAME_TRIES = 6  # frame lines tried per region, longest first
 
 
@@ -150,6 +152,38 @@ def _worth_absorbing(
     return float(mask[fy0:fy1, fx0:fx1].mean()) >= _ABSORB_INK
 
 
+def _inside(region: _Region, frame: _Region, share: float = 0.6) -> bool:
+    """True if most of ``region`` lies inside ``frame``."""
+    y0, y1, x0, x1 = region
+    overlap = max(0, min(y1, frame[1]) - max(y0, frame[0])) * max(
+        0, min(x1, frame[3]) - max(x0, frame[2])
+    )
+    return overlap >= share * (y1 - y0) * (x1 - x0)
+
+
+def _join_slices(regions: list[_Region], frames: _Frames) -> list[_Region]:
+    """Give a slice of bleeding art, left by a cut beside it, back to the bleeding panel."""
+    tol = 0.01 * frames.lines.height
+    result = list(regions)
+    for start in [r for r in regions if _bleeds(frames, r)]:
+        grown = start
+        for piece in list(result):
+            if piece == start or _bleeds(frames, piece):
+                continue
+            touches = abs(piece[0] - grown[1]) <= tol or abs(piece[1] - grown[0]) <= tol
+            within = piece[2] >= grown[2] - tol and piece[3] <= grown[3] + tol
+            if touches and within:
+                result.remove(piece)
+                grown = (min(grown[0], piece[0]), max(grown[1], piece[1]), grown[2], grown[3])
+        result[result.index(start)] = grown
+    return result
+
+
+def _region_of(panel: DetectedPanel) -> _Region:
+    box = panel.bbox
+    return (box.y, box.y + box.height, box.x, box.x + box.width)
+
+
 def _is_wide(region: _Region, page_width: int) -> bool:
     """A piece wide enough to be a line of lettering or a caption, not a speck."""
     return region[3] - region[2] >= 0.05 * page_width
@@ -157,7 +191,7 @@ def _is_wide(region: _Region, page_width: int) -> bool:
 
 class ProjectionPanelDetector:
     name = "projection"
-    version = "6"
+    version = "7"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -192,7 +226,9 @@ class ProjectionPanelDetector:
         frames = _Frames(FrameLines.find(page))
         mask = self._content_mask(page)
         panels = self._detect_with(mask, frames, loose=False)
-        if len(panels) <= 1:
+        if layout := self._inset_layout(panels, mask, frames):
+            panels = layout
+        elif len(panels) <= 1:
             # Nothing was cut. On stained or unevenly toned paper the single page colour matches
             # only part of the page, so try the paper colour measured around each pixel.
             local = local_content_mask(page, self._tolerance, self._border_fraction)
@@ -202,6 +238,55 @@ class ProjectionPanelDetector:
         if estimate_background(page, self._border_fraction).mean() < _DARK_PAPER:
             panels = self._absorb_unclaimed(panels, mask, frames.lines)
         return Detection(panels=tuple(panels), method=self.name)
+
+    @staticmethod
+    def _inset_layout(
+        panels: list[DetectedPanel], mask: Mask, frames: _Frames
+    ) -> list[DetectedPanel]:
+        """Full-bleed art with framed insets: the insets, and the art in the space they leave.
+
+        Frame lines on three sides of a rectangle that runs off the page on the others mark an
+        inset. The pieces the cuts made inside an inset are one panel again, and a slice of the
+        bleeding art the cuts left beside its neighbour joins it. When nothing could be cut (the
+        art is the page, and the paper-colour retry only fragments it) the bleeding panel is the
+        largest band of the page the insets leave free. Only a page with a panel that bleeds off
+        three sides is treated this way, and, if it was cut, only insets that were cut apart.
+        """
+        height, width = mask.shape
+        if not panels or not any(_bleeds(frames, _region_of(p)) for p in panels):
+            return []
+        insets = frames.lines.inset_frames()
+        if not insets:
+            return []
+        pieces = [_region_of(p) for p in panels]
+        if len(panels) > 1:
+            # Only an inset the cuts split into several pieces is put back together; one that
+            # holds a single panel was already found, and boxes drawn on other frame lines
+            # would add panels that are not there.
+            insets = [i for i in insets if sum(_inside(r, i) for r in pieces) >= _MIN_PIECES]
+            if not insets:
+                return []
+        outside = [r for r in pieces if not any(_inside(r, inset) for inset in insets)]
+        if len(panels) == 1:  # the page-sized panel: keep the band the insets leave free
+            bands = [
+                (0, min(r[0] for r in insets), 0, width),
+                (max(r[1] for r in insets), height, 0, width),
+                (0, height, 0, min(r[2] for r in insets)),
+                (0, height, max(r[3] for r in insets), width),
+            ]
+            main = max(bands, key=lambda r: (r[1] - r[0]) * (r[3] - r[2]))
+            if (main[1] - main[0]) * (main[3] - main[2]) < _MIN_MAIN * width * height:
+                return []
+            outside = [main]
+        else:
+            outside = _join_slices(outside, frames)
+        return [
+            DetectedPanel(
+                bbox=BoundingBox(x=x0, y=y0, width=x1 - x0, height=y1 - y0),
+                confidence=min(1.0, max(0.0, float(mask[y0:y1, x0:x1].mean()))),
+            )
+            for y0, y1, x0, x1 in (*outside, *insets)
+        ]
 
     @staticmethod
     def _absorb_unclaimed(

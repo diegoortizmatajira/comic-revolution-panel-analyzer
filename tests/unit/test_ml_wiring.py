@@ -32,7 +32,7 @@ def test_builds_the_ml_detector(tmp_path: Path) -> None:
 def test_builds_a_hybrid_over_projection_and_the_model(tmp_path: Path) -> None:
     detector = build_detector("hybrid", MlConfig(model=weights(tmp_path)))
     assert detector.name == "hybrid"
-    assert "projection@6" in detector.version
+    assert "projection@7" in detector.version
     assert "|ml@1:" in detector.version
 
 

@@ -94,6 +94,7 @@ CORRECT_PAGES = [
     "moon-mullings-003-15",
     "moon-mullings-003-17",
     "blurred-002",
+    "blurred-003",
 ]
 KNOWN_FAILURES = {
     "public_002": "L-shaped panel and bleeding art leave one page-sized panel",
@@ -111,8 +112,6 @@ KNOWN_FAILURES = {
     "moon-mullings-003-16": "open frames and overlapping balloons leave no clean gutter",
     "blurred-001": "top art bleeds behind the framed panels and the middle-row frames are "
     "staggered: no gutter, and a full-width frame line cannot be told from one through art",
-    "blurred-003": "full-bleed art with two white-framed insets over its bottom edge: the art is "
-    "cut into fragments and the insets are split off as separate pieces",
 }
 
 

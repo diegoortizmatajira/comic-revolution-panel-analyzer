@@ -94,6 +94,70 @@ class FrameLines:
             for y, a, b in self.horizontal
         )
 
+    def inset_frames(
+        self,
+        min_area: float = 0.02,
+        max_area: float = 0.5,
+        min_cover: float = 0.4,
+        tolerance: float = 0.02,
+    ) -> list[_Region]:
+        """Rectangles drawn on frame lines on at least three sides; page edges close the rest.
+
+        An inset over full-bleed art has a frame of its own on the sides that are inside the page
+        and runs off the page on the others. Candidates are every combination of line positions
+        (or the page edge); the best-framed, then smallest, come first and a candidate that
+        overlaps one already taken is dropped, which also merges the two lines of a double frame.
+        """
+        tol_y, tol_x = tolerance * self.height, tolerance * self.width
+        ys = sorted({0, self.height, *(y for y, _, _ in self.horizontal)})
+        xs = sorted({0, self.width, *(x for x, _, _ in self.vertical)})
+        page = self.height * self.width
+        found: list[tuple[int, int, _Region]] = []
+        for y0 in ys:
+            for y1 in (y for y in ys if y > y0):
+                for x0 in xs:
+                    for x1 in (x for x in xs if x > x0):
+                        area = (y1 - y0) * (x1 - x0)
+                        if not min_area * page <= area <= max_area * page:
+                            continue
+                        region = (y0, y1, x0, x1)
+                        sides = self._line_sides(region, min_cover, tol_y, tol_x)
+                        edges = (
+                            y0 <= tol_y,
+                            y1 >= self.height - tol_y,
+                            x0 <= tol_x,
+                            x1 >= self.width - tol_x,
+                        )
+                        # every side is a frame line or the page edge, and at least three are lines
+                        if all(sides[i] or edges[i] for i in range(4)) and sum(sides) >= 3:
+                            found.append((sum(sides), area, region))
+        taken: list[_Region] = []
+        for _, _, region in sorted(found, key=lambda f: (-f[0], f[1])):
+            if not any(_overlap(region, other) > 0 for other in taken):
+                taken.append(region)
+        return taken
+
+    def _line_sides(
+        self, region: _Region, min_cover: float, tol_y: float, tol_x: float
+    ) -> tuple[bool, bool, bool, bool]:
+        """Whether the top, bottom, left and right sides each lie on a frame line."""
+        y0, y1, x0, x1 = region
+
+        def covered(
+            lines: list[tuple[int, int, int]], at: int, tol: float, lo: int, hi: int
+        ) -> bool:
+            return any(
+                abs(pos - at) <= tol and min(b, hi) - max(a, lo) >= min_cover * (hi - lo)
+                for pos, a, b in lines
+            )
+
+        return (
+            covered(self.horizontal, y0, tol_y, x0, x1),
+            covered(self.horizontal, y1, tol_y, x0, x1),
+            covered(self.vertical, x0, tol_x, y0, y1),
+            covered(self.vertical, x1, tol_x, y0, y1),
+        )
+
     def encloses_as_one(
         self, left: _Region, right: _Region, *, joined: bool = False, tolerance: float = 0.02
     ) -> bool:
@@ -156,6 +220,11 @@ class FrameLines:
                 covered(self.vertical, x1, tol_x, y0, y1),
             )
         )
+
+
+def _overlap(a: _Region, b: _Region) -> int:
+    """Area shared by two regions (0 when they only touch)."""
+    return max(0, min(a[1], b[1]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[2], b[2]))
 
 
 def _merge(
