@@ -1,6 +1,6 @@
 [project]
 name = "comic-panel-analyzer"
-version = "0.1.0"
+version = "1.0.0"
 description = "API that detects comic page panels, their reading order and a reliability score."
 readme = "README.md"
 requires-python = ">=3.12"

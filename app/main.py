@@ -18,7 +18,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     app = FastAPI(
         title="Comic Panel Analyzer",
-        version="0.1.0",
+        version="1.0.0",
         description="Detects comic page panels, their reading order and a reliability score.",
     )
     app.state.container = container or build_container(settings)
