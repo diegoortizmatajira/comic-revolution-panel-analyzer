@@ -52,10 +52,11 @@ far are in [ADR 0002](adr/0002-optional-ml-detector.md).
 `--refine-edges` applies the edge-snapping refiner after each detector. The labels in the corpus are
 frame-tight: balloons and captions that hang outside a panel's frame are not part of the label.
 The refiner's job is the opposite, to keep those balloons inside the box, so on open-frame pages it
-moves boxes away from the labels and strict scores drop. With `projection` on the committed
-corpus: f1@50 0.824 to 0.818, f1@75 0.721 to 0.667; `classical` f1@75 0.418 to 0.411. A few pages
-(for example `moon-mullings-003-10` and `-17`) grow by 100 to 180 px to include balloons above
-the frame.
+moves boxes away from the labels and strict scores drop. With `projection@6` on the committed
+corpus (37 pages: 26 labelled, 11 synthetic): f1@50 0.898 either way, f1@75 0.773 to 0.744;
+`classical` is unchanged (f1@50 0.502, f1@75 0.411). Several pages (for example `moon-mullings-003-10`,
+`-14` and `-17`, and `western_fighters_8`) grow by 140 to 180 px to include balloons above the frame;
+`midnight-mistery-004-14`, whose caption boxes are already split off as extra panels, grows by 470 px.
 
 IoU cannot reward "no content is cropped", so judge the refiner by looking at the boxes, not by
 f1@75. A truth-coverage metric (share of each labelled box covered) would be the fair number.
