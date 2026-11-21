@@ -62,6 +62,13 @@ def _parser() -> argparse.ArgumentParser:
         help="ONNX model for the ml and hybrid detectors (never committed; see docs/adr/0002)",
     )
     p.add_argument("--ml-confidence", type=float, default=0.25, help="ML score threshold")
+    p.add_argument("--ml-input-size", type=int, default=640, help="ML model's square input side")
+    p.add_argument(
+        "--ml-output-format",
+        choices=("yolov8", "end2end", "dfine"),
+        default="yolov8",
+        help="layout of the ML model's output",
+    )
     p.add_argument(
         "--include-unverified",
         action="store_true",
@@ -121,7 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
 
     if args.propose is not None:
-        ml_for_propose = MlConfig(model=args.ml_model) if args.ml_model else None
+        ml_for_propose = (
+            MlConfig(
+                model=args.ml_model,
+                input_size=args.ml_input_size,
+                output_format=args.ml_output_format,
+            )
+            if args.ml_model
+            else None
+        )
         return _propose(
             args.propose, (args.detector or ["projection"])[0], ml_for_propose, force=args.force
         )
@@ -135,7 +150,16 @@ def main(argv: list[str] | None = None) -> int:
         print("No labelled pages found.", file=sys.stderr)
         return 2
 
-    ml = MlConfig(model=args.ml_model, confidence=args.ml_confidence) if args.ml_model else None
+    ml = (
+        MlConfig(
+            model=args.ml_model,
+            confidence=args.ml_confidence,
+            input_size=args.ml_input_size,
+            output_format=args.ml_output_format,
+        )
+        if args.ml_model
+        else None
+    )
     default = [*sorted(DETECTORS), *(ML_DETECTORS if ml else ())]
     names = args.detector or default
     reports = [

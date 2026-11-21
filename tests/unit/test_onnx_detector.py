@@ -15,6 +15,7 @@ from app.services.detection.onnx import (
     _default_session_factory,
     letterbox,
     nms,
+    stretch,
 )
 
 SIZE = 64
@@ -250,3 +251,76 @@ def test_other_thresholds_share_the_loaded_weights(tmp_path: Path) -> None:
     assert len(loose.detect(PAGE).panels) == 1  # ...and over 0.3
     assert len(calls) == 1  # one session, loaded by whichever ran first
     assert loose.version == strict.version
+
+
+class DfineSession:
+    """A D-FINE style session: two inputs, three named outputs."""
+
+    def __init__(self, labels: list[int], boxes: list[list[float]], scores: list[float]) -> None:
+        self.outputs = [
+            np.array([labels], np.int64),
+            np.array([boxes], np.float32).reshape(1, len(labels), 4),
+            np.array([scores], np.float32),
+        ]
+        self.fed: dict[str, np.ndarray] = {}
+        self.output_names: object = None
+
+    def get_inputs(self) -> Sequence[Any]:
+        return [FakeInput(), type("Sizes", (), {"name": "orig_target_sizes"})()]
+
+    def run(self, output_names: object, input_feed: dict[str, object]) -> Sequence[object]:
+        self.output_names = output_names
+        self.fed = {k: np.asarray(v) for k, v in input_feed.items()}
+        return self.outputs
+
+
+def dfine(tmp_path: Path, session: object, **kwargs: Any) -> OnnxPanelDetector:
+    return OnnxPanelDetector(
+        model_file(tmp_path),
+        input_size=SIZE,
+        output_format="dfine",
+        session_factory=lambda _: session,  # type: ignore[arg-type,return-value]
+        **kwargs,
+    )
+
+
+def test_stretch_ignores_the_aspect_ratio() -> None:
+    blob = stretch(PAGE, SIZE)
+    assert blob.shape == (1, 3, SIZE, SIZE)
+    assert blob.dtype == np.float32
+    assert np.allclose(blob, 1.0)  # no grey padding
+
+
+def test_decodes_dfine_output_in_page_pixels(tmp_path: Path) -> None:
+    session = DfineSession(
+        labels=[0, 0, 1, 0, 0],
+        boxes=[[10, 5, 60, 45], [11, 5, 60, 45], [0, 0, 20, 20], [70, 5, 95, 45], [1, 1, 2, 2]],
+        scores=[0.9, 0.8, 0.9, 0.7, 0.1],
+    )
+    det = dfine(tmp_path, session)
+    panels = det.detect(PAGE).panels
+    # duplicate (NMS), other class and low score are dropped
+    assert [(p.bbox.x, p.bbox.width) for p in panels] == [(10, 50), (70, 25)]
+    assert session.output_names == ["labels", "boxes", "scores"]
+    assert session.fed["images"].shape == (1, 3, SIZE, SIZE)
+    assert session.fed["orig_target_sizes"].tolist() == [[100, 50]]  # width, height
+    assert session.fed["orig_target_sizes"].dtype == np.int64
+
+
+def test_dfine_with_no_detections_is_an_empty_result(tmp_path: Path) -> None:
+    det = dfine(tmp_path, DfineSession([0], [[0, 0, 50, 50]], [0.01]))
+    assert det.detect(PAGE).panels == ()
+
+
+def test_dfine_model_shape_problems_are_reported(tmp_path: Path) -> None:
+    class OneInput(DfineSession):
+        def get_inputs(self) -> Sequence[Any]:
+            return [FakeInput()]
+
+    with pytest.raises(ModelError, match="orig_target_sizes"):
+        dfine(tmp_path, OneInput([0], [[0, 0, 5, 5]], [0.9])).detect(PAGE)
+
+    bad = DfineSession([0], [[0, 0, 5, 5]], [0.9])
+    bad.outputs[1] = np.zeros((1, 1, 5), np.float32)
+    with pytest.raises(ModelError, match="dfine ML model boxes"):
+        dfine(tmp_path, bad).detect(PAGE)

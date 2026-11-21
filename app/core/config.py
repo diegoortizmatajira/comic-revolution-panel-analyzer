@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     ml_input_size: int = Field(default=640, gt=0)
     ml_confidence: opt.MlConfidence = 0.25
     ml_nms_iou: opt.MlNmsIou = 0.45
-    ml_output_format: Literal["yolov8", "end2end"] = "yolov8"
+    ml_output_format: Literal["yolov8", "end2end", "dfine"] = "yolov8"
     ml_panel_class: int = Field(default=0, ge=0)
 
     log_level: str = "INFO"

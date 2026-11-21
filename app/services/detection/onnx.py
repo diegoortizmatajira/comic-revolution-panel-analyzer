@@ -8,6 +8,11 @@ The model must take a square NCHW float32 RGB input in 0-1 and produce either
 * ``yolov8``  - ``(1, 4 + classes, N)`` or ``(1, N, 4 + classes)``: centre x, centre y, width,
   height, then one score per class, in input pixels (what Ultralytics ``format=onnx`` writes), or
 * ``end2end`` - ``(1, N, 6)``: x1, y1, x2, y2, score, class, already de-duplicated.
+
+or, as ``dfine`` (D-FINE / RT-DETR exports), take ``images`` plus ``orig_target_sizes`` (the
+page's ``[width, height]``, int64) and return ``labels``, ``boxes`` (x1, y1, x2, y2) and
+``scores`` by name. The page is stretched to the square, not letterboxed, and the boxes come
+back in page pixels.
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-OutputFormat = Literal["yolov8", "end2end"]
+OutputFormat = Literal["yolov8", "end2end", "dfine"]
 PAD_VALUE = 114 / 255  # Ultralytics' letterbox grey
 MIN_SIDE_PX = 2
 VERSION = "1"
@@ -102,6 +107,14 @@ def letterbox(page: NDArray[np.uint8], size: int) -> tuple[NDArray[np.float32], 
     return blob, Letterbox(scale, pad_x, pad_y, width, height)
 
 
+def stretch(page: NDArray[np.uint8], size: int) -> NDArray[np.float32]:
+    """Resize the page to size x size ignoring its aspect ratio (how D-FINE is trained)."""
+    import cv2  # noqa: PLC0415
+
+    resized = cv2.resize(page, (size, size), interpolation=cv2.INTER_LINEAR)
+    return np.ascontiguousarray((resized.astype(np.float32) / 255.0).transpose(2, 0, 1)[None])
+
+
 def nms(boxes: NDArray[np.float32], scores: NDArray[np.float32], iou_threshold: float) -> list[int]:
     """Greedy non-maximum suppression on x1, y1, x2, y2 boxes. Returns kept indices."""
     order = np.argsort(-scores, kind="stable")
@@ -169,6 +182,8 @@ class OnnxPanelDetector:
         self.version = f"{VERSION}:{file_digest(model_path)[:12]}"
 
     def detect(self, page: NDArray[np.uint8]) -> Detection:
+        if self._format == "dfine":
+            return self._detect_dfine(page)
         blob, fit = letterbox(page, self._size)
         session = self._load()
         input_name = session.get_inputs()[0].name
@@ -179,6 +194,35 @@ class OnnxPanelDetector:
             box = fit.to_box(float(x1), float(y1), float(x2), float(y2))
             if box is not None:
                 panels.append(DetectedPanel(bbox=box, confidence=float(np.clip(score, 0.0, 1.0))))
+        return Detection(panels=tuple(panels), method=self.name)
+
+    def _detect_dfine(self, page: NDArray[np.uint8]) -> Detection:
+        height, width = page.shape[:2]
+        session = self._load()
+        inputs = session.get_inputs()
+        if len(inputs) < 2:
+            msg = "A dfine ML model needs two inputs: images and orig_target_sizes"
+            raise ModelError(msg)
+        feed = {
+            inputs[0].name: stretch(page, self._size),
+            inputs[1].name: np.array([[width, height]], dtype=np.int64),
+        }
+        labels, boxes, scores = (
+            np.asarray(out) for out in session.run(["labels", "boxes", "scores"], feed)
+        )
+        if boxes.ndim != 3 or boxes.shape[2] != 4:
+            msg = f"Unexpected dfine ML model boxes shape {boxes.shape}"
+            raise ModelError(msg)
+        keep = (scores[0] >= self._confidence) & (labels[0] == self._panel_class)
+        found, found_scores = boxes[0][keep].astype(np.float32), scores[0][keep].astype(np.float32)
+        fit = Letterbox(1.0, 0, 0, width, height)  # boxes are already in page pixels
+        panels: list[DetectedPanel] = []
+        for index in nms(found, found_scores, self._nms_iou):
+            box = fit.to_box(*(float(v) for v in found[index]))
+            if box is not None:
+                panels.append(
+                    DetectedPanel(bbox=box, confidence=float(np.clip(found_scores[index], 0, 1)))
+                )
         return Detection(panels=tuple(panels), method=self.name)
 
     def with_thresholds(self, confidence: float, nms_iou: float) -> OnnxPanelDetector:
