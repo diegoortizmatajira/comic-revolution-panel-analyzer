@@ -164,13 +164,14 @@ a reader can fall back to showing the page. A single detected panel is returned 
 `method` names the detector that produced the result. Choose it with `PANELS_DETECTOR`:
 `projection` (default; gutter-based, works on colour), `classical` (contour-based), or the optional
 `ml` and `hybrid` detectors (see below). With `hybrid`, `method` is the one that answered that page.
-`projection` (version 6) also follows a slightly slanted gutter when no straight row or column is
+`projection` (version 7) also follows a slightly slanted gutter when no straight row or column is
 clean, and uses long straight frame lines to cut where there is no gutter at all and to set off
 title banners, which are returned as a first panel. Caption strips and balloons that sit between panels are shared between the panel
 above and the one below instead of being lost. On a dark page it rejoins a framed panel that its own
-black art cut apart, and gives a panel that bleeds off the page the dark space between it and the page edge.
+black art cut apart, and gives a panel that bleeds off the page the dark space between it and the page edge. Full-bleed art with framed insets over its edge
+(frame lines on three sides of a rectangle that runs off the page) is returned as the art plus the insets.
 Known limitations: panels with no gutter between them (art that bleeds into the next
-panel, staggered frames over bleeding art, open frames, full-bleed art with inset panels), L-shaped
+panel, staggered frames over bleeding art, open frames), L-shaped
 panels, title banners and caption strips on pages whose frames are too broken to find (the ML detector
 never returns titles),
 borderless panels on unevenly toned paper (a page where nothing could be cut is retried against

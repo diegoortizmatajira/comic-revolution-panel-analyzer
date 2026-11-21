@@ -64,9 +64,18 @@
   accuracy, so it is not a general rule: on light paper the trim is reliable. Both steps are
   limited to what the corpus shows: a perfectly straight, full-height edge on a piece inside a
   frame still counts as a divider and blocks the rejoin.
+  Projection v7 handles full-bleed art with framed insets over its edge (`blurred-003`, and its
+  original, which is not committed). Nothing can be cut on the blurred copy (the art is the page),
+  and the paper-colour retry only fragmented it into five pieces; on the original the first pass cuts
+  the art at the inset's top frame line and the inset in two. `FrameLines.inset_frames` finds
+  rectangles with frame lines on at least three sides whose other sides run off the page (the
+  best-framed, smallest first, so a double frame is one inset). A single page-sized panel
+  becomes the insets plus the largest band of page they leave free; on a cut page only an inset
+  that was cut into two or more pieces is put back together, and a slice of the art cut off beside
+  it rejoins the art. Insets drawn on other frame lines added extra panels on `009` and
+  `blurred-001` when every inset was used, hence that rule.
   What still fails, tracked in issue 11 (strict `xfail` in `tests/integration/test_fixture_pages.py`):
-  staggered frames over art that bleeds behind them (`blurred-001`); full-bleed art with inset
-  panels over its bottom edge (`blurred-003`); an L-shaped panel (`public_002`); slanted gutters
+  staggered frames over art that bleeds behind them (`blurred-001`); an L-shaped panel (`public_002`); slanted gutters
   crossed by captions and art (`public_003`, `moon-mullings-003-09`); open frames with no gutter
   (`moon-mullings-003-03`, `-16`); a narrow gutter holding 22% ink (`midnight-mistery-004-07`);
   and captions or large lettering splitting a panel (`midnight-mistery-004-08`, `-14`). Several
