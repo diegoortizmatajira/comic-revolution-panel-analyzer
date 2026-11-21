@@ -78,3 +78,15 @@ balloons float over the gutters. Boxes on these pages are approximate (about 30 
 
 Each page has a hand-made ground-truth file next to it (`<name>.labels.json`, format in
 `docs/evaluation.md`) used by the evaluation harness.
+
+## Blurred layout fixtures
+
+`blurred-001.webp` to `blurred-003.webp` are heavily blurred copies of copyrighted pages from the repository owner's
+local `samples/` folder, with the lettering removed. Only the panel layout survives (frames, white
+borders, bleeding art), so it is not a reproduction of the page and can be committed.
+
+| File | What it is | Why it is useful |
+|---|---|---|
+| `blurred-001.webp` | six panels, top-left art bleeding behind framed panels | staggered frames on the middle row, no gutter (#11) |
+| `blurred-002.webp` | four panels under a curved black outline | slanted gutters, red-framed strip, dark page (projection gets it right) |
+| `blurred-003.webp` | full-bleed art with two white-framed insets | bleed with insets over its bottom edge, no gutter (#11) |

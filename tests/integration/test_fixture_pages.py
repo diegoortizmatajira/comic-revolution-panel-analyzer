@@ -93,6 +93,7 @@ CORRECT_PAGES = [
     "moon-mullings-003-14",
     "moon-mullings-003-15",
     "moon-mullings-003-17",
+    "blurred-002",
 ]
 KNOWN_FAILURES = {
     "public_002": "L-shaped panel and bleeding art leave one page-sized panel",
@@ -108,6 +109,10 @@ KNOWN_FAILURES = {
     "moon-mullings-003-09": "the two top panels touch through art (27% of the path between them "
     "is ink)",
     "moon-mullings-003-16": "open frames and overlapping balloons leave no clean gutter",
+    "blurred-001": "top art bleeds behind the framed panels and the middle-row frames are "
+    "staggered: no gutter, and a full-width frame line cannot be told from one through art",
+    "blurred-003": "full-bleed art with two white-framed insets over its bottom edge: the art is "
+    "cut into fragments and the insets are split off as separate pieces",
 }
 
 
@@ -163,7 +168,7 @@ def test_western_fighters_6_title_lines_up_with_the_big_panel() -> None:
 
 
 def test_every_fixture_page_is_accounted_for() -> None:
-    stems = {name.removesuffix(".jpg") for name in PUBLIC_DOMAIN_PAGES}
+    stems = {p.stem for p in (*FIXTURES.glob("*.jpg"), *FIXTURES.glob("*.webp"))}
     assert stems == set(CORRECT_PAGES) | set(KNOWN_FAILURES)
 
 

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "reading_direction": "ltr",
+  "verified": true,
+  "tags": [
+    "bleed",
+    "staggered-frames",
+    "blurred"
+  ],
+  "notes": "6 panels; the top-left art bleeds behind the framed panels and the middle-row frames are staggered. Blurred derivative of a local sample, so the layout can be committed.",
+  "panels": [
+    {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 0.6556847545219638,
+      "height": 0.3235294117647059
+    },
+    {
+      "x": 0.6556847545219638,
+      "y": 0.0,
+      "width": 0.31007751937984496,
+      "height": 0.28991596638655465
+    },
+    {
+      "x": 0.0,
+      "y": 0.32563025210084034,
+      "width": 0.539405684754522,
+      "height": 0.27941176470588236
+    },
+    {
+      "x": 0.539405684754522,
+      "y": 0.34243697478991597,
+      "width": 0.46059431524547806,
+      "height": 0.2415966386554622
+    },
+    {
+      "x": 0.0,
+      "y": 0.6260504201680672,
+      "width": 0.6298449612403101,
+      "height": 0.3550420168067227
+    },
+    {
+      "x": 0.6479328165374677,
+      "y": 0.6016806722689075,
+      "width": 0.3145994832041344,
+      "height": 0.3983193277310924
+    }
+  ]
+}

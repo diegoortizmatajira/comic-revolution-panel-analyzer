@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "reading_direction": "ltr",
+  "verified": true,
+  "tags": [
+    "blurred",
+    "bleed",
+    "inset"
+  ],
+  "notes": "3 panels; full-bleed art with two white-framed insets over its bottom edge. Where the bleeding panel ends behind the insets is a judgement call. Blurred derivative of a local sample.",
+  "panels": [
+    {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 1.0,
+      "height": 0.7142857142857143
+    },
+    {
+      "x": 0.04198966408268734,
+      "y": 0.6323529411764706,
+      "width": 0.3145994832041344,
+      "height": 0.36764705882352944
+    },
+    {
+      "x": 0.3830749354005168,
+      "y": 0.7121848739495799,
+      "width": 0.6169250645994832,
+      "height": 0.24579831932773108
+    }
+  ]
+}

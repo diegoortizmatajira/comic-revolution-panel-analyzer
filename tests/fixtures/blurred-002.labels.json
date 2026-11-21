@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "reading_direction": "ltr",
+  "verified": true,
+  "tags": [
+    "blurred",
+    "dark",
+    "slanted-gutter"
+  ],
+  "notes": "4 panels; a curved black outline under the top panel, slanted gutters between the middle panels, a red-framed strip at the bottom. Blurred derivative of a local sample.",
+  "panels": [
+    {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 1.0,
+      "height": 0.4327731092436975
+    },
+    {
+      "x": 0.0,
+      "y": 0.3949579831932773,
+      "width": 0.5103359173126615,
+      "height": 0.3949579831932773
+    },
+    {
+      "x": 0.44573643410852715,
+      "y": 0.45168067226890757,
+      "width": 0.5167958656330749,
+      "height": 0.3382352941176471
+    },
+    {
+      "x": 0.1065891472868217,
+      "y": 0.792016806722689,
+      "width": 0.8934108527131783,
+      "height": 0.18487394957983194
+    }
+  ]
+}
