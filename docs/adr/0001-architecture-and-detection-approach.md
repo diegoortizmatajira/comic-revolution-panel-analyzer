@@ -83,17 +83,28 @@
   from an edge inside art: it is 11 to 28 px wide at the real dividers and absent at every
   interior line tried. With the 85% line and the framed-sides test alone, 22 corpus pages had a
   candidate line, single panels were split, and page accuracy fell from 0.66 to 0.50.
+  Projection v9 rejoins a caption box to the panel it sits at the top of (`midnight-mistery-004-08`
+  and `-14`, which also fixed the lettering-in-art page). A caption box inside a panel's frame was
+  cut off from the art and, being just over the minimum panel area (2% of the page), survived as a
+  panel of its own. `_join_caption_boxes` joins a piece that is at most 6% of the page tall, at
+  least four times wider than tall and framed on at least two sides to a panel at least three times
+  its height that begins within 4% of the page height below it and shares 80% of its width. The
+  framed-sides test keeps an unframed title banner a panel of its own, as the labels expect; the
+  4% gap covers the panel's own lettering between the box and the art.
   What still fails, tracked in issue 11 (strict `xfail` in `tests/integration/test_fixture_pages.py`):
   an L-shaped panel (`public_002`); slanted gutters
   crossed by captions and art (`public_003`, `moon-mullings-003-09`); open frames with no gutter
-  (`moon-mullings-003-03`, `-16`); a narrow gutter holding 22% ink (`midnight-mistery-004-07`);
-  and captions or large lettering splitting a panel (`midnight-mistery-004-08`, `-14`). Several
+  (`moon-mullings-003-03`, `-16`); a narrow gutter holding 22% ink (`midnight-mistery-004-07`). Several
   share one cause: white balloons and caption areas look like gutters, so a valley cut that would
   find the narrow gutters also splits other panels. Tried and not kept: cutting at any frame line
   spanning 90% of the region (broke pages that were correct, because captions and art also carry
-  full-width lines), vertical frame-line cuts, a valley cut on the column profile, counting paper
+  full-width lines), vertical frame-line cuts without the flat band, a valley cut on the column profile, counting paper
   enclosed by outlines as content, and letting a box claim ink across a neighbour's wall. These
-  cases are what the ML detector is for. A blurred copy of a page keeps its frame geometry but
+  cases are what the ML detector is for. A flat band alone cannot find the gutters that balloons
+  cross: at the setting that finds 92% of the corpus's real gutters (64 between side-by-side
+  labelled panels), 19% of single panels (28 of 145) contain a flat run too (plain sky or wall), and
+  requiring dark frame strokes on both sides still splits 2 to 5% of single panels while finding
+  only 60 to 70% of the gutters, which would break more pages than it fixes. A blurred copy of a page keeps its frame geometry but
   not its ink statistics, so the blurred fixtures do not cover the dark-page cases; the synthetic
   tests in `tests/unit/test_projection_detector.py` do.
 - **Reading order:** recursive XY-cut honouring `ltr`/`rtl`. `sequence_confidence`
