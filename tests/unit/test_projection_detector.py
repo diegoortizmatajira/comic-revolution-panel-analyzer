@@ -380,3 +380,28 @@ def test_has_band_finds_a_flat_colour_column_run_and_not_a_lone_line() -> None:
     noisy[:, 500] = 0  # one dark line inside art is not a band
     assert not _has_band(noisy, region, 500)
     assert not _has_band(None, region, 500)
+
+
+def test_caption_box_resting_on_a_panel_is_joined_to_it() -> None:
+    # A framed caption box cut off from the top of its panel, with the panel's lettering between
+    lines = FrameLines(
+        horizontal=[(57, 82, 533), (121, 82, 533), (450, 82, 535)],
+        vertical=[(82, 57, 450), (533, 57, 450)],
+        height=1443,
+        width=975,
+    )
+    caption, body = (57, 121, 82, 533), (160, 450, 82, 535)
+    assert ProjectionPanelDetector._join_caption_boxes([caption, body], lines) == [
+        (57, 450, 82, 535)
+    ]
+
+
+def test_unframed_lettering_and_a_thin_panel_are_not_joined_to_the_panel_below() -> None:
+    lines = FrameLines(horizontal=[(450, 82, 535)], height=1443, width=975)
+    banner, body = (57, 121, 82, 533), (160, 450, 82, 535)  # no frame lines: a title banner
+    assert ProjectionPanelDetector._join_caption_boxes([banner, body], lines) == [banner, body]
+    tall = (57, 300, 82, 533)  # not short, so it is a panel
+    assert ProjectionPanelDetector._join_caption_boxes([tall, (310, 900, 82, 535)], lines) == [
+        tall,
+        (310, 900, 82, 535),
+    ]

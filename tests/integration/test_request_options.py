@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 KEY = "test-key"
 HEADERS = {"X-API-Key": KEY}
-BASE_VERSION = "projection@8+xycut@4"
+BASE_VERSION = "projection@9+xycut@4"
 
 
 def make_client(**kwargs: Any) -> TestClient:
@@ -140,7 +140,7 @@ def test_the_classical_detector_can_be_chosen_per_request(
 def test_the_post_processing_steps_can_be_switched_on(client: TestClient, page_2x2: bytes) -> None:
     body = analyze(client, page_2x2, refine_edges=True, claim_captions=True)
     assert len(body["panels"]) == 4
-    assert body["version"].startswith("projection@8+chain@edge-snap@")
+    assert body["version"].startswith("projection@9+chain@edge-snap@")
     assert "+caption-claim@" in body["version"]
 
 

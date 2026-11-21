@@ -49,6 +49,12 @@ _BAND_REACH = 0.0225  # of the page width: how far from a divider line its band 
 _BAND_TOLERANCE = 30  # colour distance within which a column counts as one flat colour
 _BAND_SHARE = 0.9  # share of a column's rows that must match its colour
 _BAND_MIN = 0.004  # of the page width: the narrowest band that counts as a gutter
+_CAPTION_HEIGHT = 0.06  # of the page: a caption box is no taller than this
+_CAPTION_ASPECT = 4.0  # and at least this many times wider than tall
+_CAPTION_SIDES = 2  # frame sides it needs, so unframed lettering (a banner) stays a panel
+_CAPTION_GAP = 0.04  # of the page height: how close it must rest on the panel below
+_CAPTION_OVERLAP = 0.8  # share of the narrower width the two must share
+_CAPTION_TALLER = 3.0  # the panel below is at least this many times as tall
 _MAX_FRAME_TRIES = 6  # frame lines tried per region, longest first
 
 
@@ -217,7 +223,7 @@ def _is_wide(region: _Region, page_width: int) -> bool:
 
 class ProjectionPanelDetector:
     name = "projection"
-    version = "8"
+    version = "9"
 
     def __init__(  # noqa: PLR0913
         self,
@@ -372,6 +378,7 @@ class ProjectionPanelDetector:
                 )
         kept = self._join_framed_pieces(kept, frames.lines)
         kept = self._attach_strips(kept, strips, 0.02 * height, banner_area, loose=loose)
+        kept = self._join_caption_boxes(kept, frames.lines)
         if loose:
             kept = self._snap_to_frame_lines(kept, frames.lines, 0.06 * height)
             kept = self._grow_into_gap_above(kept, 0.08 * height)
@@ -382,6 +389,38 @@ class ProjectionPanelDetector:
             )
             for y0, y1, x0, x1 in kept
         ]
+
+    @staticmethod
+    def _join_caption_boxes(kept: list[_Region], lines: FrameLines) -> list[_Region]:
+        """Put a caption box back on the panel it sits at the top of.
+
+        A caption box inside a panel's frame is cut off from the art below it and, being a little
+        over the minimum panel area, survives as a panel of its own: wide, short, framed, and
+        resting right on a much taller panel of about its width. Unframed lettering is not
+        joined: a title banner is a panel of its own.
+        """
+        height = lines.height
+        result = list(kept)
+        for strip in sorted(kept):
+            y0, y1, x0, x1 = strip
+            if strip not in result or (y1 - y0) > _CAPTION_HEIGHT * height:
+                continue
+            if (x1 - x0) < _CAPTION_ASPECT * (y1 - y0) or lines.sides(strip) < _CAPTION_SIDES:
+                continue
+            for body in result:
+                b0, b1, bx0, bx1 = body
+                overlap = min(x1, bx1) - max(x0, bx0)
+                if (
+                    body != strip
+                    and abs(b0 - y1) <= _CAPTION_GAP * height
+                    and overlap >= _CAPTION_OVERLAP * min(x1 - x0, bx1 - bx0)
+                    and (b1 - b0) >= _CAPTION_TALLER * (y1 - y0)
+                    and (bx1 - bx0) >= _CAPTION_OVERLAP * (x1 - x0)
+                ):
+                    result.remove(strip)
+                    result[result.index(body)] = (y0, b1, min(x0, bx0), max(x1, bx1))
+                    break
+        return result
 
     @staticmethod
     def _join_framed_pieces(kept: list[_Region], lines: FrameLines) -> list[_Region]:

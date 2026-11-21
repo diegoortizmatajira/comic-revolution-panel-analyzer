@@ -96,6 +96,8 @@ CORRECT_PAGES = [
     "blurred-002",
     "blurred-001",
     "blurred-003",
+    "midnight-mistery-004-08",
+    "midnight-mistery-004-14",
 ]
 KNOWN_FAILURES = {
     "public_002": "L-shaped panel and bleeding art leave one page-sized panel",
@@ -103,9 +105,6 @@ KNOWN_FAILURES = {
     "hybrid is fine",
     "midnight-mistery-004-07": "narrow gutter holds 22% ink, above the cut threshold; a valley cut "
     "finds it but then white balloons read as gutters and split other panels",
-    "midnight-mistery-004-08": "last panel split in two by large lettering and its caption strip; "
-    "white balloons and caption areas read as gutters",
-    "midnight-mistery-004-14": "caption boxes at the top of panels are split off as extra panels",
     "moon-mullings-003-03": "two open-framed bottom panels with no gutter stay merged; a frame "
     "line between panels cannot be told from a line inside one panel",
     "moon-mullings-003-09": "the two top panels touch through art (27% of the path between them "
