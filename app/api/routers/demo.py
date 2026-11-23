@@ -31,20 +31,22 @@ async def demo() -> FileResponse:
 
 
 class SampleOut(BaseModel):
-    source: Literal["samples", "fixtures"]
+    source: Literal["samples", "feedback", "fixtures"]
     name: str
 
 
 def _folders(container: ContainerDep) -> dict[str, Path]:
-    return {
-        "samples": container.settings.samples_dir,
-        "fixtures": container.settings.fixtures_dir,
-    }
+    settings = container.settings
+    folders = {"samples": settings.samples_dir}
+    if settings.feedback_dir is not None:
+        folders["feedback"] = settings.feedback_dir
+    folders["fixtures"] = settings.fixtures_dir
+    return folders
 
 
 @router.get("/demo/samples")
 async def list_samples(container: ContainerDep) -> list[SampleOut]:
-    """Local pages (`samples`, git-ignored) followed by the committed test fixtures."""
+    """Local pages (`samples`), stored feedback pages, then the committed test fixtures."""
     return [
         SampleOut(source=source, name=path.name)
         for source, folder in _folders(container).items()

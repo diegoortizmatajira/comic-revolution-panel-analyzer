@@ -162,8 +162,9 @@ def test_demo_page_served_when_enabled() -> None:
     assert "/v1/panels/analyze/upload" in response.text
 
 
-def demo_settings(samples: Path, fixtures: Path) -> Settings:
+def demo_settings(samples: Path, fixtures: Path, feedback: Path | None = None) -> Settings:
     return Settings(
+        feedback_dir=feedback,
         api_keys=KEY,
         enable_demo_page=True,
         samples_dir=samples,
@@ -193,6 +194,18 @@ def test_demo_lists_and_serves_samples_and_fixtures(tmp_path: Path, page_2x2: by
         assert c.get("/demo/samples/samples/notes.txt").status_code == 404
         assert c.get("/demo/samples/nope/a.png").status_code == 404
         assert c.get("/demo/samples/samples/..%2Fsecret.png").status_code == 404
+
+
+def test_demo_lists_and_serves_feedback_samples(tmp_path: Path, page_2x2: bytes) -> None:
+    feedback = tmp_path / "feedback"
+    feedback.mkdir()
+    (feedback / "abc.png").write_bytes(page_2x2)
+    (feedback / "abc.labels.json").write_text("{}")
+    settings = demo_settings(tmp_path / "nope", tmp_path / "nada", feedback)
+    with TestClient(create_app(settings)) as c:
+        assert c.get("/demo/samples").json() == [{"source": "feedback", "name": "abc.png"}]
+        assert c.get("/demo/samples/feedback/abc.png").content == page_2x2
+        assert c.get("/demo/samples/feedback/abc.labels.json").status_code == 404
 
 
 def test_demo_samples_missing_folders_are_empty(tmp_path: Path) -> None:

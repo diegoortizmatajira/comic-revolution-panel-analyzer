@@ -13,8 +13,9 @@ uv run uvicorn app.main:app_factory --factory --reload
 
 Demo page (upload/paste a page and see numbered panel overlays): set
 `PANELS_ENABLE_DEMO_PAGE=true` and open http://localhost:8000/demo. Images placed in
-`samples/` (git-ignored, your own pages) and the committed `tests/fixtures/` pages show up in its
-"Sample pages" dropdown, in separate groups.
+`samples/` (git-ignored, your own pages), the pages stored by the feedback endpoint
+(`PANELS_FEEDBACK_DIR`) and the committed `tests/fixtures/` pages show up in its "Sample pages"
+dropdown, in separate groups.
 
 Interactive docs: http://localhost:8000/docs · OpenAPI: `/openapi.json` · Health: `/healthz`
 

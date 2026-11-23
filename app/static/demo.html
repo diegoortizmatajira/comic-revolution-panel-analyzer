@@ -235,7 +235,7 @@ async function loadSamples() {
   try {
     const items = await (await fetch('/demo/samples')).json();
     if (!items.length) return;
-    const groups = { samples: 'Local samples', fixtures: 'Test fixtures' };
+    const groups = { samples: 'Local samples', feedback: 'Feedback samples', fixtures: 'Test fixtures' };
     $('sample').innerHTML = '<option value="">Select a sample…</option>' +
       Object.entries(groups).map(([source, label]) => {
         const options = items.filter(i => i.source === source)
