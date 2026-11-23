@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from app.domain.models import DetectedPanel, Detection
     from app.domain.ports import PanelDetector
 
-VERSION = "3"  # bump when the policy or selection rule changes (3: agreement; 2: title exempt)
+# Bump when the policy or selection rule changes (4: extra panels; 3: agreement; 2: title exempt).
+VERSION = "4"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +39,20 @@ class ReliabilityPolicy:
     min_panels: int = 3
     max_aspect: float = 5.0
     agree_iou: float = 0.6
+    # Prototype knobs (off by default, so version 3 behaviour is unchanged):
+    # * prefer_model: use the model's answer whenever it is not degenerate (finds at least
+    #   ``min_model_panels`` panels), whatever the primary looks like;
+    # * extra_panels: when the primary looks plausible but the model finds at least this many
+    #   more panels, the primary probably merged panels, so use the model (0 = off).
+    prefer_model: bool = False
+    min_model_panels: int = 2
+    extra_panels: int = 1
+
+    def prefers_model(self, primary: Detection, other: Detection) -> bool:
+        n, m = len(primary.panels), len(other.panels)
+        if self.prefer_model:
+            return m >= self.min_model_panels or (m > 0 and n == 0)
+        return self.extra_panels > 0 and m >= n + self.extra_panels
 
     def distrusts(self, primary: Detection) -> bool:
         panels = primary.panels
@@ -94,6 +109,8 @@ class HybridPanelDetector:
     def detect(self, page: NDArray[np.uint8]) -> Detection:
         first = self._primary.detect(page)
         second = self._fallback.detect(page)
+        if self._policy.prefers_model(first, second):
+            return second
         if self._policy.distrusts(first):
             # Keep the primary answer unless the fallback actually found something.
             return second if second.panels else first

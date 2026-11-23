@@ -119,6 +119,25 @@ coin flip: on the 16 real pages where they disagree each is exactly right on 8 a
 `projection` under-segments) was left out: it rests on about three pages and was found after
 seeing the results.
 
+**Extra panels (policy version 4).** Tried on 15 feedback pages (one modern colour issue, full-bleed,
+inset and overlapping panels) added to the 32 real pages, with the Inkwell model. On the feedback
+pages `projection` looks plausible and is wrong (`hybrid` v3: f1@50 0.67, 0 of 15 pages exactly right).
+Rule: when the model finds **at least one more panel** than a plausible `projection`, `projection`
+probably merged panels, so the model's answer is used (`extra_panels`, 0 turns it off).
+
+| Policy | 32 earlier real pages f1@50 / f1@75 / page_acc | 15 feedback pages | all 47 |
+|---|---|---|---|
+| v3 | 0.96 / 0.88 / 0.81 | 0.67 / 0.49 / 0.00 | 0.88 / 0.77 / 0.55 |
+| extra >= 1 (default) | 0.97 / 0.87 / 0.81 | 0.82 / 0.70 / 0.20 | 0.92 / 0.82 / 0.62 |
+| extra >= 2 | 0.97 / 0.86 / 0.78 | 0.81 / 0.66 / 0.13 | 0.92 / 0.80 / 0.57 |
+| extra >= 3 | 0.97 / 0.88 / 0.81 | 0.79 / 0.63 / 0.07 | 0.92 / 0.80 / 0.57 |
+| model first (`prefer_model`, off) | 0.95 / 0.79 / 0.59 | 0.85 / 0.74 / 0.27 | 0.92 / 0.78 / 0.49 |
+
+Model-first is better on the feedback pages but costs the earlier pages 0.09 f1@75 and 0.22
+page_acc, so it stays an off-by-default knob. `extra >= 1` was chosen on these same 15 pages, which
+come from one issue, so it is a prototype: confirm it on pages from other publishers. Not done: a
+gutter-fraction signal to distrust `projection` on full-bleed pages.
+
 The thresholds (3 panels, 5:1, IoU 0.6, 8% tolerance) were chosen on this small corpus and are
 untuned beyond it. IoU 0.5 also takes the model's boxes on `moon-mullings-003-14` and loses panels
 there, and 0.7 changes nothing, so the choice is fragile. Revisit them when the corpus grows.
