@@ -142,17 +142,26 @@ gutter-fraction signal to distrust `projection` on full-bleed pages.
 borderless or full-bleed panels (8 of the 11 missed panels: 26 to 98% of the page, many with insets
 over them); a lower threshold does not find them (recall 0.85 to 0.88 for precision 0.86 to 0.71),
 and `projection` already has a matching box for 6 of the 11. Rule: when the model's answer is used,
-a `projection` panel of at least 10% of the page that the model's boxes cover at most 50% of is added
+a `projection` panel of at least 10% of the page that the model's boxes cover at most 55% of is added
 (`fill_max_covered`, `fill_min_area`; 0 turns it off). A 100x100 coverage grid is used.
 
 | Policy | 32 earlier real pages f1@50 / f1@75 / page_acc | 15 feedback pages | all 47 |
 |---|---|---|---|
 | v4 | 0.97 / 0.87 / 0.81 | 0.82 / 0.70 / 0.20 | 0.92 / 0.82 / 0.62 |
-| v5, covered <= 0.5 (default) | 0.97 / 0.87 / 0.81 | 0.84 / 0.70 / 0.27 | 0.93 / 0.82 / 0.64 |
+| v5, covered <= 0.5 | 0.97 / 0.87 / 0.81 | 0.84 / 0.70 / 0.27 | 0.93 / 0.82 / 0.64 |
 | covered <= 0.8 | 0.97 / 0.87 / 0.81 | 0.85 / 0.71 / 0.27 | 0.93 / 0.82 / 0.64 |
 
 The gain is small (one more page exactly right) and the earlier pages do not move. The result is flat
-from 0.5 to 0.8, so the conservative end was taken. It was found on the same 15 pages from one issue.
+from 0.5 to 0.8. It was found on the same 15 pages from one issue.
+
+**Limit 0.55 (policy version 6).** The first default, 0.5, missed feedback page `9ac020` by 1.6 points:
+the model finds its four inset panels but no box for the full-bleed figure, and its boxes cover 51.6% of
+`projection`'s whole-page box. A sweep over all 58 pages (32 earlier real, 11 generated, 15 feedback)
+at 0.5, 0.55, 0.6 and 0.65 changed only that page, from 0.5 to 0.55, and nothing from 0.55 to 0.65: the
+earlier real and generated pages are identical, feedback f1@50 goes 0.844 to 0.852 and f1@75 0.701 to
+0.710, and exactly-right pages stay 4 of 15 (a stray model box remains on `9ac020`). 0.55 is the
+smallest limit that fixes it. The fill rule also lifts the generated pages (fill off to 0.5: f1@50 0.986
+to 1.000, exactly right 0.73 to 0.82). The evidence for 0.55 over 0.5 is one page.
 
 The thresholds (3 panels, 5:1, IoU 0.6, 8% tolerance) were chosen on this small corpus and are
 untuned beyond it. IoU 0.5 also takes the model's boxes on `moon-mullings-003-14` and loses panels

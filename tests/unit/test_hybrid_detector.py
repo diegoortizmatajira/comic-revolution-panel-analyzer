@@ -86,7 +86,7 @@ def test_version_covers_both_detectors_so_cached_results_invalidate() -> None:
     a = HybridPanelDetector(StubDetector("projection", "1", []), StubDetector("ml", "1:abc", []))
     b = HybridPanelDetector(StubDetector("projection", "1", []), StubDetector("ml", "1:def", []))
     assert a.name == "hybrid"
-    assert a.version == "5[projection@1|ml@1:abc]"
+    assert a.version == "6[projection@1|ml@1:abc]"
     assert a.version != b.version  # new weights -> new version
 
 

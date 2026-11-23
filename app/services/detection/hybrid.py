@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from app.domain.ports import PanelDetector
 
 # Bump when the policy or selection rule changes
-# (5: bleed fill; 4: extra panels; 3: agreement; 2: title exempt).
-VERSION = "5"
+# (6: bleed fill limit 0.55; 5: bleed fill; 4: extra panels; 3: agreement; 2: title exempt).
+VERSION = "6"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +54,7 @@ class ReliabilityPolicy:
     # Bleed fill: a large panel the model has no box for (borderless or full-bleed art, or the art
     # under inset panels) is added from the primary when the model's boxes cover at most
     # ``fill_max_covered`` of it and it is at least ``fill_min_area`` of the page (0.0 = off).
-    fill_max_covered: float = 0.5
+    fill_max_covered: float = 0.55
     fill_min_area: float = 0.1
 
     def uncovered_panels(
