@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 AMBIGUITY_PENALTY = 0.5
 # Chosen on the evaluation corpus: ML boxes order perfectly from about 8% up (docs/adr/0002).
 DEFAULT_GAP_TOLERANCE = 0.08
+FULL_HEIGHT = 0.9  # share of the group's height a column must span to be peeled off
 
 
 class XYCutOrdering:
@@ -29,8 +30,9 @@ class XYCutOrdering:
     """
 
     name = "xycut"
-    # 4: panels over each other never share a row; 3: uncuttable groups read as rows; 2: tolerance
-    version = "4"
+    # 5: a full-height column is peeled off first; 4: panels over each other never share a row;
+    # 3: uncuttable groups read as rows; 2: tolerance
+    version = "5"
 
     def __init__(self, gap_tolerance: float = DEFAULT_GAP_TOLERANCE) -> None:
         self._tolerance = gap_tolerance
@@ -54,12 +56,51 @@ class XYCutOrdering:
             return self._recurse(rows, direction)
 
         columns = _split(group, self._tolerance, lo=lambda p: p.bbox.x, hi=lambda p: p.bbox.right)
+        if len(columns) > 2:
+            columns = self._peel_full_height_column(group, columns)
         if len(columns) > 1:
             if direction is ReadingDirection.RTL:
                 columns.reverse()
             return self._recurse(columns, direction)
 
         return self._by_rows(group, direction), len(group)
+
+    def _peel_full_height_column(
+        self,
+        group: tuple[DetectedPanel, ...],
+        columns: list[tuple[DetectedPanel, ...]],
+    ) -> list[tuple[DetectedPanel, ...]]:
+        """Keep a full-height column apart from the rest when the rest reads in rows.
+
+        A tall panel beside a block of rows (the block's columns do not line up from row to row)
+        has no horizontal gutter, so the groups are first cut into columns and the block is read
+        column by column: top-right panel after the bottom row. Cut the tall panel off at the edge
+        and the rest can be cut into rows, which is how it reads. Only an outermost column that
+        spans the group's height is peeled, and only if what is left has a horizontal gutter.
+        """
+        top = min(p.bbox.y for p in group)
+        bottom = max(p.bbox.bottom for p in group)
+
+        def spans(part: tuple[DetectedPanel, ...]) -> bool:
+            height = max(p.bbox.bottom for p in part) - min(p.bbox.y for p in part)
+            return height >= FULL_HEIGHT * (bottom - top)
+
+        def has_rows(
+            parts: list[tuple[DetectedPanel, ...]],
+        ) -> tuple[bool, tuple[DetectedPanel, ...]]:
+            rest = tuple(p for part in parts for p in part)
+            rows = _split(rest, self._tolerance, lo=lambda p: p.bbox.y, hi=lambda p: p.bbox.bottom)
+            return len(rows) > 1, rest
+
+        if spans(columns[0]):
+            ok, rest = has_rows(columns[1:])
+            if ok:
+                return [columns[0], rest]
+        if spans(columns[-1]):
+            ok, rest = has_rows(columns[:-1])
+            if ok:
+                return [rest, columns[-1]]
+        return columns
 
     def _by_rows(
         self, group: tuple[DetectedPanel, ...], direction: ReadingDirection

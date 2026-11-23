@@ -131,3 +131,43 @@ def test_a_title_over_the_first_panel_is_read_first_even_when_the_tops_are_close
     ]
     result = ordering.order(layout, ReadingDirection.LTR)
     assert positions(result.panels)[:2] == [(40, 50), (10, 50)]
+
+
+STAGGERED = [  # a tall panel, then two rows beside it whose columns do not line up
+    panel(10, 620, 270, 360),  # 1: tall, full height
+    panel(290, 620, 400, 160),  # 2
+    panel(690, 620, 290, 160),  # 3: right of 2, above 6 and 7
+    panel(330, 780, 170, 210),  # 4
+    panel(510, 780, 140, 200),  # 5
+    panel(660, 790, 160, 190),  # 6
+    panel(830, 780, 150, 200),  # 7
+]
+
+
+def test_a_tall_panel_beside_staggered_rows_does_not_make_the_block_read_by_columns() -> None:
+    # The gutter at x=690 runs between 2 and 3 and between 5 and 6, so cutting columns first
+    # would read 2, 4, 5, 3, 6, 7. The rows beside the tall panel are read row by row.
+    result = ordering.order(list(reversed(STAGGERED)), ReadingDirection.LTR)
+    assert result.panels == tuple(STAGGERED)
+
+
+def test_the_same_staggered_layout_mirrored_reads_right_to_left_by_rows() -> None:
+    mirrored = [
+        panel(1000 - p.bbox.x - p.bbox.width, p.bbox.y, p.bbox.width, p.bbox.height)
+        for p in STAGGERED
+    ]
+    result = ordering.order(list(reversed(mirrored)), ReadingDirection.RTL)
+    assert result.panels == tuple(mirrored)
+
+
+def test_columns_stay_columns_when_the_rest_has_no_horizontal_gutter() -> None:
+    # tall panel, then two columns whose panels interlock: nothing to cut into rows
+    layout = [
+        panel(0, 0, 300, 1000),
+        panel(310, 0, 300, 600),
+        panel(310, 610, 300, 390),
+        panel(620, 0, 300, 400),
+        panel(620, 410, 300, 590),
+    ]
+    result = ordering.order(layout, ReadingDirection.LTR)
+    assert positions(result.panels) == [(0, 0), (310, 0), (310, 610), (620, 0), (620, 410)]

@@ -111,7 +111,7 @@ def test_a_new_image_under_the_same_reference_replaces_the_old_one(
 
 def test_detected_is_recorded(fb: TestClient, page_2x2: bytes, tmp_path: Path) -> None:
     detected = {
-        "version": "projection@9+xycut@4",
+        "version": "projection@9+xycut@5",
         "method": "projection",
         "panels": [{"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0, "order": 1}],
         "sequence_confidence": 0.5,
@@ -119,7 +119,7 @@ def test_detected_is_recorded(fb: TestClient, page_2x2: bytes, tmp_path: Path) -
     r = fb.post("/v1/panels/feedback", json=payload(page_2x2, detected=detected), headers=HEADERS)
     meta = json.loads((folder(tmp_path) / f"{r.json()['sample_id']}.feedback.json").read_text())
     assert meta["reference"] == "book-1/page-3"
-    assert meta["detected"]["version"] == "projection@9+xycut@4"
+    assert meta["detected"]["version"] == "projection@9+xycut@5"
     assert meta["image_sha256"] == r.json()["image_sha256"]
 
 

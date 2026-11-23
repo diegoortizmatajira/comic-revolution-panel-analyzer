@@ -55,7 +55,7 @@ Response:
   ],
   "sequence_confidence": 1.0,
   "method": "projection",
-  "version": "projection@1+xycut@4",
+  "version": "projection@1+xycut@5",
   "whole_page_fallback": false,
   "warnings": []
 }
@@ -114,7 +114,7 @@ curl -X POST localhost:8000/v1/panels/feedback -H 'X-API-Key: change-me' \
        "reference": "book-12/page-3", "reading_direction": "ltr",
        "panels": [{"x": 0.05, "y": 0.03, "width": 0.43, "height": 0.45},
                   {"x": 0.52, "y": 0.03, "width": 0.43, "height": 0.45}],
-       "detected": {"version": "projection@9+xycut@4", "method": "projection",
+       "detected": {"version": "projection@9+xycut@5", "method": "projection",
                     "panels": [{"x": 0, "y": 0, "width": 1, "height": 1, "order": 1}],
                     "sequence_confidence": 1.0}}'
 
