@@ -143,6 +143,50 @@ Suggested tags: `clean`, `dark`, `noisy`, `aged-paper`, `borderless`, `bleed`, `
 
 Drafts are only a starting point: never accept one without checking it.
 
+## Feedback samples
+
+`POST /v1/panels/feedback` (README) stores a corrected mapping sent by a client as a labelled page,
+so real failures become test data. `PANELS_FEEDBACK_DIR` defaults to `samples/feedback`, which the `samples/.gitignore` already
+keeps out of git; set it to an empty value to disable the endpoint.
+
+Each sample is three files named after a hash of the client's `reference` (the reference itself is
+opaque and never used as a file name):
+
+| File | Content |
+|---|---|
+| `<id>.jpg` / `.png` / `.webp` | the page, exactly as sent |
+| `<id>.labels.json` | the corrected panels in the label format below (`verified: true`, tag `feedback`) |
+| `<id>.feedback.json` | `reference`, `image_sha256`, `received_at` and, if sent, what the analyzer `detected` |
+
+A folder like this **is** a corpus, so `uv run python -m app.evaluation --corpus samples/feedback`
+scores the detectors against the corrections as they are. To score them together with your other
+pages, and as their own `feedback` row in the per-tag table, copy them into `samples/`:
+
+```sh
+uv run python -m app.evaluation.import_feedback --dry-run     # what would be copied
+uv run python -m app.evaluation.import_feedback               # samples/feedback -> samples/feedback-<id>.*
+uv run python -m app.evaluation --verbose                     # includes the imported pages
+```
+
+`--source` and `--dest` change the folders. Running it again changes nothing; a page whose
+correction was later replaced is reported as skipped until you pass `--overwrite`.
+
+### Decisions (issue #12)
+
+- **Retention:** samples are kept until deleted (`DELETE /v1/panels/feedback/{reference}`, or remove
+  the files). There is no automatic expiry; the count and size limits are the only automatic bound.
+- **Licensing:** the images are the client's own, possibly copyrighted, pages. They stay in the
+  git-ignored folder, are never committed, published or added to `tests/fixtures`, and `detected`
+  and the references are stored with them. Promoting a page to `tests/fixtures` needs the same
+  public-domain check as any other fixture.
+- **Use:** evaluation and detector tuning (#2, #3, #11). Training a model (#4) on these pages is
+  **not** covered and needs its own decision.
+- **Authentication:** feedback reuses the analyze API keys, so any key that can analyze can also
+  write and delete samples. There is one key kind today; a separate scope belongs with #6 (per-key
+  permissions) and is not done here.
+- **Same reference, new image:** the latest correction wins, image included, so a page that was
+  re-scanned does not leave a stale pair behind.
+
 ## Baseline and CI
 
 `docs/evaluation/baseline.json` holds the results on the committed corpus (`tests/fixtures`

@@ -97,6 +97,49 @@ you changed.
 - The ML weights load once per server; a request that changes `ml_confidence` or `ml_nms_iou`
   reuses them.
 
+### Feedback: corrected mappings as labelled samples (optional)
+
+When the analyzer is wrong on a page and a person fixes it, the correction is exactly the labelled
+data the evaluation harness needs. `POST /v1/panels/feedback` stores the corrected panels together
+with the page image. Samples go to `PANELS_FEEDBACK_DIR` (default `samples/feedback`, git-ignored); set it
+to an empty value to turn the feature off, and every feedback call then answers
+`501 feedback_disabled`, so a client can tell it is unavailable. It takes the
+same API key as the analyze endpoints.
+
+```sh
+curl -X POST localhost:8000/v1/panels/feedback -H 'X-API-Key: change-me' \
+  -H 'Content-Type: application/json' \
+  -d '{"image": {"url": "https://example.com/page.png"},
+       "reference": "book-12/page-3", "reading_direction": "ltr",
+       "panels": [{"x": 0.05, "y": 0.03, "width": 0.43, "height": 0.45},
+                  {"x": 0.52, "y": 0.03, "width": 0.43, "height": 0.45}],
+       "detected": {"version": "projection@9+xycut@4", "method": "projection",
+                    "panels": [{"x": 0, "y": 0, "width": 1, "height": 1, "order": 1}],
+                    "sequence_confidence": 1.0}}'
+
+# The image as a file; panels and detected are JSON in form fields
+curl -X POST localhost:8000/v1/panels/feedback/upload -H 'X-API-Key: change-me' \
+  -F file=@page.png -F reference=book-12/page-3 -F reading_direction=ltr \
+  -F 'panels=[{"x":0.05,"y":0.03,"width":0.43,"height":0.45}]'
+
+curl -X DELETE localhost:8000/v1/panels/feedback/book-12/page-3 -H 'X-API-Key: change-me'
+```
+
+- `panels` are normalized boxes in reading order: 1 to 64 of them, finite, inside the page, each at
+  least 1% of the page in both dimensions. Anything else is a `422 validation_error`.
+  `detected` (optional) is what the analyzer returned, kept so a sample records what was wrong.
+- `reference` is an opaque id you choose (book and page). Sending it again **replaces** the earlier
+  sample, image included: `201` for a new sample, `200` with `replaced: true` otherwise, and
+  `unchanged: true` when nothing differed (nothing is rewritten).
+- The image goes through the same size, dimension and format checks as `analyze`. The folder is
+  capped by `PANELS_FEEDBACK_MAX_SAMPLES` (1000) and `PANELS_FEEDBACK_MAX_TOTAL_BYTES` (2 GiB); a
+  sample that does not fit is `507 feedback_storage_full`.
+- `DELETE /v1/panels/feedback/{reference}` withdraws a sample (`204`, or `404` if unknown).
+
+Storage, retention and use of the data are described in
+[docs/evaluation.md](docs/evaluation.md#feedback-samples). The images are your users' own pages:
+keep the folder out of git (`samples/feedback` is already ignored) and never publish it.
+
 ### Client examples
 
 Python (`pip install httpx`):

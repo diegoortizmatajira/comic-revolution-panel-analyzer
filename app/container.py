@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.services.detection.registry import MlConfig
+from app.services.feedback import FeedbackStore
 from app.services.image.decoder import ImageLimits
 from app.services.image.sources import UrlImageFetcher
 from app.services.pipeline import PipelineFactory
@@ -26,6 +27,7 @@ class Container:
     limits: ImageLimits
     api_keys: ApiKeyStore
     rate_limiter: RateLimiter
+    feedback: FeedbackStore | None = None  # None: PANELS_FEEDBACK_DIR is not set
 
 
 def ml_config(settings: Settings) -> MlConfig | None:
@@ -58,4 +60,13 @@ def build_container(settings: Settings) -> Container:
         ),
         api_keys=StaticApiKeyStore(settings.parsed_api_keys()),
         rate_limiter=SlidingWindowRateLimiter(settings.rate_limit_per_minute),
+        feedback=(
+            None
+            if settings.feedback_dir is None
+            else FeedbackStore(
+                settings.feedback_dir,
+                max_samples=settings.feedback_max_samples,
+                max_total_bytes=settings.feedback_max_total_bytes,
+            )
+        ),
     )

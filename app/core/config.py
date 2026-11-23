@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core import options as opt  # noqa: TC001  (pydantic needs them at runtime)
@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     enable_demo_page: bool = False  # serves /demo, a developer test page
     samples_dir: Path = Path("samples")  # local pages listed by the demo page
     fixtures_dir: Path = Path("tests/fixtures")  # committed test pages, also listed
+
+    # Feedback samples (corrected panel mappings sent by clients). Set it to an empty value to turn
+    # the endpoint off. The pages are the client's own, so keep the folder out of git (`samples/`
+    # already is).
+    feedback_dir: Path | None = Path("samples/feedback")
+    feedback_max_samples: int = Field(default=1000, gt=0)
+    feedback_max_total_bytes: int = Field(default=2 * 1024**3, gt=0)
 
     # Processing defaults. Every field in this block can be overridden per request with the
     # option of the same name (see app/core/options.py for what each one does and its range).
@@ -55,6 +62,11 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     log_json: bool = True
+
+    @field_validator("feedback_dir", mode="before")
+    @classmethod
+    def _empty_feedback_dir_means_off(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def _ml_detectors_need_a_model(self) -> Self:

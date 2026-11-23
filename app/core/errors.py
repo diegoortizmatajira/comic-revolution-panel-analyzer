@@ -58,3 +58,18 @@ class RateLimitExceededError(AppError):
 class InvalidOptionError(AppError):
     code = "invalid_option"
     status_code = 422
+
+
+class FeedbackDisabledError(AppError):
+    code = "feedback_disabled"
+    status_code = 501
+
+
+class FeedbackStorageFullError(AppError):
+    code = "feedback_storage_full"
+    status_code = 507
+
+
+class FeedbackNotFoundError(AppError):
+    code = "feedback_not_found"
+    status_code = 404
