@@ -138,6 +138,22 @@ page_acc, so it stays an off-by-default knob. `extra >= 1` was chosen on these s
 come from one issue, so it is a prototype: confirm it on pages from other publishers. Not done: a
 gutter-fraction signal to distrust `projection` on full-bleed pages.
 
+**Bleed fill (policy version 5).** What the model misses on the feedback pages is mostly large
+borderless or full-bleed panels (8 of the 11 missed panels: 26 to 98% of the page, many with insets
+over them); a lower threshold does not find them (recall 0.85 to 0.88 for precision 0.86 to 0.71),
+and `projection` already has a matching box for 6 of the 11. Rule: when the model's answer is used,
+a `projection` panel of at least 10% of the page that the model's boxes cover at most 50% of is added
+(`fill_max_covered`, `fill_min_area`; 0 turns it off). A 100x100 coverage grid is used.
+
+| Policy | 32 earlier real pages f1@50 / f1@75 / page_acc | 15 feedback pages | all 47 |
+|---|---|---|---|
+| v4 | 0.97 / 0.87 / 0.81 | 0.82 / 0.70 / 0.20 | 0.92 / 0.82 / 0.62 |
+| v5, covered <= 0.5 (default) | 0.97 / 0.87 / 0.81 | 0.84 / 0.70 / 0.27 | 0.93 / 0.82 / 0.64 |
+| covered <= 0.8 | 0.97 / 0.87 / 0.81 | 0.85 / 0.71 / 0.27 | 0.93 / 0.82 / 0.64 |
+
+The gain is small (one more page exactly right) and the earlier pages do not move. The result is flat
+from 0.5 to 0.8, so the conservative end was taken. It was found on the same 15 pages from one issue.
+
 The thresholds (3 panels, 5:1, IoU 0.6, 8% tolerance) were chosen on this small corpus and are
 untuned beyond it. IoU 0.5 also takes the model's boxes on `moon-mullings-003-14` and loses panels
 there, and 0.7 changes nothing, so the choice is fragile. Revisit them when the corpus grows.

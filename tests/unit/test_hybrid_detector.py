@@ -6,7 +6,7 @@ from app.services.detection.hybrid import HybridPanelDetector, ReliabilityPolicy
 from tests.conftest import panel
 
 NO_EXTRA = ReliabilityPolicy(extra_panels=0)  # isolate the older rules from the extra-panels rule
-PAGE = np.zeros((10, 10, 3), dtype=np.uint8)
+PAGE = np.zeros((1000, 1000, 3), dtype=np.uint8)
 
 
 class StubDetector:
@@ -86,7 +86,7 @@ def test_version_covers_both_detectors_so_cached_results_invalidate() -> None:
     a = HybridPanelDetector(StubDetector("projection", "1", []), StubDetector("ml", "1:abc", []))
     b = HybridPanelDetector(StubDetector("projection", "1", []), StubDetector("ml", "1:def", []))
     assert a.name == "hybrid"
-    assert a.version == "4[projection@1|ml@1:abc]"
+    assert a.version == "5[projection@1|ml@1:abc]"
     assert a.version != b.version  # new weights -> new version
 
 
@@ -162,3 +162,37 @@ def test_model_first_uses_the_model_unless_it_is_degenerate() -> None:
     assert three.detect(PAGE).method == "ml"
     one = HybridPanelDetector(primary, StubDetector("ml", "9", grid(1)), model_first)
     assert one.detect(PAGE).method == "projection"
+
+
+def test_a_large_primary_panel_the_model_left_uncovered_is_added() -> None:
+    # the model found only two small insets; projection also has the bleeding art under them
+    bleed = panel(0, 0, 1000, 800)
+    primary = StubDetector("projection", "1", [bleed])
+    model = [panel(100, 100, 200, 200), panel(600, 500, 200, 200)]
+    result = HybridPanelDetector(primary, StubDetector("ml", "9", model)).detect(PAGE)
+    assert result.method == "ml"
+    assert result.panels[-1] == bleed
+    assert len(result.panels) == 3
+
+
+def test_a_primary_panel_the_model_already_covers_is_not_added() -> None:
+    merged = panel(0, 0, 1000, 400)  # projection merged two panels that the model split
+    primary = StubDetector("projection", "1", [merged])
+    model = [panel(0, 0, 500, 400), panel(500, 0, 500, 400)]
+    result = HybridPanelDetector(primary, StubDetector("ml", "9", model)).detect(PAGE)
+    assert result.panels == tuple(model)
+
+
+def test_a_small_uncovered_primary_panel_is_not_added() -> None:
+    primary = StubDetector("projection", "1", [panel(0, 0, 100, 100)])  # 1% of the page
+    model = [panel(500, 500, 400, 400)]
+    result = HybridPanelDetector(primary, StubDetector("ml", "9", model)).detect(PAGE)
+    assert result.panels == tuple(model)
+
+
+def test_the_bleed_fill_can_be_turned_off() -> None:
+    primary = StubDetector("projection", "1", [panel(0, 0, 1000, 800)])
+    model = [panel(100, 100, 200, 200), panel(600, 500, 200, 200)]
+    off = ReliabilityPolicy(fill_max_covered=0.0)
+    result = HybridPanelDetector(primary, StubDetector("ml", "9", model), off).detect(PAGE)
+    assert result.panels == tuple(model)

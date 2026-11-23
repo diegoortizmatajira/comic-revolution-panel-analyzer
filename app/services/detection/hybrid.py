@@ -5,15 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
+
+from app.domain.models import Detection
+
 if TYPE_CHECKING:
-    import numpy as np
     from numpy.typing import NDArray
 
-    from app.domain.models import DetectedPanel, Detection
+    from app.domain.models import DetectedPanel
     from app.domain.ports import PanelDetector
 
-# Bump when the policy or selection rule changes (4: extra panels; 3: agreement; 2: title exempt).
-VERSION = "4"
+# Bump when the policy or selection rule changes
+# (5: bleed fill; 4: extra panels; 3: agreement; 2: title exempt).
+VERSION = "5"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,38 @@ class ReliabilityPolicy:
     prefer_model: bool = False
     min_model_panels: int = 2
     extra_panels: int = 1
+    # Bleed fill: a large panel the model has no box for (borderless or full-bleed art, or the art
+    # under inset panels) is added from the primary when the model's boxes cover at most
+    # ``fill_max_covered`` of it and it is at least ``fill_min_area`` of the page (0.0 = off).
+    fill_max_covered: float = 0.5
+    fill_min_area: float = 0.1
+
+    def uncovered_panels(
+        self, primary: Detection, chosen: Detection, page_shape: tuple[int, ...]
+    ) -> list[DetectedPanel]:
+        """Primary panels that are large and mostly not covered by the chosen boxes."""
+        if self.fill_max_covered <= 0.0 or not chosen.panels:
+            return []
+        height, width = page_shape[0], page_shape[1]
+        grid = 100
+
+        def cells(panel: DetectedPanel) -> tuple[slice, slice]:
+            y0 = min(grid - 1, max(0, panel.bbox.y * grid // height))
+            x0 = min(grid - 1, max(0, panel.bbox.x * grid // width))
+            y1 = min(grid, max(y0 + 1, -(-panel.bbox.bottom * grid // height)))
+            x1 = min(grid, max(x0 + 1, -(-panel.bbox.right * grid // width)))
+            return slice(y0, y1), slice(x0, x1)
+
+        covered = np.zeros((grid, grid), dtype=bool)
+        for q in chosen.panels:
+            covered[cells(q)] = True
+        extra = [
+            p
+            for p in primary.panels
+            if p.bbox.area >= self.fill_min_area * width * height
+            and covered[cells(p)].mean() <= self.fill_max_covered
+        ]
+        return extra
 
     def prefers_model(self, primary: Detection, other: Detection) -> bool:
         n, m = len(primary.panels), len(other.panels)
@@ -109,6 +145,14 @@ class HybridPanelDetector:
     def detect(self, page: NDArray[np.uint8]) -> Detection:
         first = self._primary.detect(page)
         second = self._fallback.detect(page)
+        chosen = self._choose(first, second)
+        if chosen is second:
+            extra = self._policy.uncovered_panels(first, second, page.shape)
+            if extra:
+                return Detection((*second.panels, *extra), second.method)
+        return chosen
+
+    def _choose(self, first: Detection, second: Detection) -> Detection:
         if self._policy.prefers_model(first, second):
             return second
         if self._policy.distrusts(first):
