@@ -20,6 +20,7 @@ through the same analyzer and reading-order code the API uses.
 | `prec@50`, `rec@50`, `f1@50` | Panels matched one-to-one at IoU >= 0.5, micro-averaged over all panels |
 | `f1@75` | The same at IoU >= 0.75 (tighter boxes) |
 | `order` | Share of matched panel pairs that are read in the ground-truth order |
+| `overlap` | The same, only for pairs of panels that overlap in the ground truth (an inset on a scene): shows how overlaps are read, and is `-` on a corpus without any |
 | `page_acc` | Share of pages that are **exactly** right: every panel found, nothing extra, same order |
 | `conf_auc` | Chance that a correct page gets a higher `sequence_confidence` than a wrong one. 0.5 means the score carries no information, 1.0 means it separates right from wrong perfectly |
 

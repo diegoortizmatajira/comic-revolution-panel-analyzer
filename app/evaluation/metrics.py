@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 IOU_LOOSE = 0.5
 IOU_STRICT = 0.75
+OVERLAP_SHARE = 0.5  # of the smaller box, for two ground-truth panels to count as overlapping
 
 
 def iou(a: NormalizedBox, b: NormalizedBox) -> float:
@@ -56,6 +57,30 @@ def order_agreement(pairs: Sequence[tuple[int, int]]) -> tuple[int, int]:
     return concordant, total
 
 
+def _overlaps(a: NormalizedBox, b: NormalizedBox) -> bool:
+    """True if one box covers more than half of the other (an inset, or a scene behind an inset)."""
+    ix = max(0.0, min(a.x + a.width, b.x + b.width) - max(a.x, b.x))
+    iy = max(0.0, min(a.y + a.height, b.y + b.height) - max(a.y, b.y))
+    return ix * iy > OVERLAP_SHARE * min(a.width * a.height, b.width * b.height)
+
+
+def overlap_order_agreement(
+    pairs: Sequence[tuple[int, int]], truth: Sequence[NormalizedBox]
+) -> tuple[int, int]:
+    """(concordant, total) for the matched pairs of panels that overlap in the ground truth.
+
+    Panels that sit over one another have no clean top-to-bottom order: a full-bleed scene starts
+    above the inset that reads before it. Plain `order_agreement` counts these pairs among all
+    the others; this isolates them, so a change to how overlaps are read shows up as a number.
+    """
+    concordant = total = 0
+    for (p1, t1), (p2, t2) in combinations(sorted(pairs), 2):
+        if _overlaps(truth[t1], truth[t2]):
+            total += 1
+            concordant += (p1 < p2) == (t1 < t2)
+    return concordant, total
+
+
 @dataclass(frozen=True, slots=True)
 class PageResult:
     id: str
@@ -69,6 +94,8 @@ class PageResult:
     correct: bool  # every panel found at IoU >= 0.5, nothing extra, same order
     sequence_confidence: float
     whole_page_fallback: bool
+    overlap_concordant: int = 0  # order_* restricted to panels that overlap in the ground truth
+    overlap_total: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +115,7 @@ def score_page(
     loose = match(predicted, truth, IOU_LOOSE)
     strict = match(predicted, truth, IOU_STRICT)
     concordant, total = order_agreement(loose)
+    overlap_concordant, overlap_total = overlap_order_agreement(loose, truth)
     correct = len(predicted) == len(truth) == len(loose) and concordant == total
     return PageResult(
         id=page_id,
@@ -101,6 +129,8 @@ def score_page(
         correct=correct,
         sequence_confidence=prediction.sequence_confidence,
         whole_page_fallback=prediction.whole_page_fallback,
+        overlap_concordant=overlap_concordant,
+        overlap_total=overlap_total,
     )
 
 
@@ -134,6 +164,7 @@ class Summary:
     recall_75: float | None
     f1_75: float | None
     order_accuracy: float | None
+    overlap_order_accuracy: float | None  # order accuracy on panels that overlap in the truth
     page_accuracy: float | None
     confidence_auc: float | None  # does sequence_confidence rank correct pages above wrong ones?
     confidence_correct: float | None  # mean sequence_confidence on correct pages
@@ -170,6 +201,9 @@ def summarize(results: Iterable[PageResult]) -> Summary:
         recall_75=r75,
         f1_75=_f1(p75, r75),
         order_accuracy=_ratio(sum(r.order_concordant for r in rs), sum(r.order_total for r in rs)),
+        overlap_order_accuracy=_ratio(
+            sum(r.overlap_concordant for r in rs), sum(r.overlap_total for r in rs)
+        ),
         page_accuracy=_ratio(len(right), len(rs)),
         confidence_auc=auc(right, wrong),
         confidence_correct=sum(right) / len(right) if right else None,
