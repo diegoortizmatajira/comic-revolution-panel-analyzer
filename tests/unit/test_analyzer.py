@@ -33,7 +33,7 @@ def test_numbers_panels_in_reading_order_with_normalized_boxes() -> None:
     assert [(p.id, p.order, p.bbox.x) for p in result.panels] == [(1, 1, 0), (2, 2, 250)]
     assert result.panels[0].normalized_bbox.width == 0.5
     assert result.method == "fake"
-    assert result.version == "fake@7+xycut@5"
+    assert result.version == "fake@7+xycut@6"
     assert result.whole_page_fallback is False
     assert result.warnings == ()
 

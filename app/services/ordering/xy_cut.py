@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 AMBIGUITY_PENALTY = 0.5
 # Chosen on the evaluation corpus: ML boxes order perfectly from about 8% up (docs/adr/0002).
 DEFAULT_GAP_TOLERANCE = 0.08
+# Share of the smaller of two panels that must overlap for the larger to sit behind it.
+COVERED = 0.5
 FULL_HEIGHT = 0.9  # share of the group's height a column must span to be peeled off
 
 
@@ -30,9 +32,10 @@ class XYCutOrdering:
     """
 
     name = "xycut"
-    # 5: a full-height column is peeled off first; 4: panels over each other never share a row;
-    # 3: uncuttable groups read as rows; 2: tolerance
-    version = "5"
+    # 6: a panel behind insets reads from its centre; 5: a full-height column is peeled
+    # off first; 4: panels over each other never share a row; 3: uncuttable groups read as rows;
+    # 2: tolerance
+    version = "6"
 
     def __init__(self, gap_tolerance: float = DEFAULT_GAP_TOLERANCE) -> None:
         self._tolerance = gap_tolerance
@@ -111,12 +114,18 @@ class XYCutOrdering:
         pixels higher, even when it is the right-hand panel of the same row. Two panels that
         sit over each other (a title above the first panel) are never one row, however close
         their tops are: only panels side by side can share a row.
+
+        A full-bleed scene with insets on its corner has no meaningful top edge: it may
+        lie a little above or below the insets' without telling which is read first. Such a
+        panel is placed by `_anchor` (its centre) instead.
         """
-        by_top = sorted(group, key=lambda p: (p.bbox.y, p.bbox.bottom))
-        slack = self._tolerance * (max(p.bbox.bottom for p in group) - by_top[0].bbox.y)
+        first_top = min(p.bbox.y for p in group)
+        slack = self._tolerance * (max(p.bbox.bottom for p in group) - first_top)
+        anchor = {id(p): _anchor(p, group, slack) for p in group}
+        by_top = sorted(group, key=lambda p: (anchor[id(p)], p.bbox.bottom))
         rows: list[list[DetectedPanel]] = [[by_top[0]]]
         for panel in by_top[1:]:
-            same_row = panel.bbox.y - rows[-1][0].bbox.y <= slack and not any(
+            same_row = anchor[id(panel)] - anchor[id(rows[-1][0])] <= slack and not any(
                 _stacked(panel, other) for other in rows[-1]
             )
             if same_row:
@@ -138,6 +147,36 @@ class XYCutOrdering:
             result.extend(ordered)
             ambiguous += amb
         return result, ambiguous
+
+
+def _anchor(panel: DetectedPanel, group: Sequence[DetectedPanel], slack: float) -> float:
+    """Where a panel starts for reading: its top edge, or its centre when it sits behind insets.
+
+    A panel that overlaps smaller ones by more than half of each is behind them. If it starts
+    clearly above all of them (``slack`` higher) it is the page's opening image and reads first
+    from its top. If it starts level with the insets or below, their corner hides its top edge
+    and what shows of the panel is further down, so its centre is the anchor.
+    """
+    on_top = [
+        other
+        for other in group
+        if other is not panel
+        and _area(other) < _area(panel)
+        and _overlap_area(panel, other) > COVERED * _area(other)
+    ]
+    if on_top and min(other.bbox.y for other in on_top) - panel.bbox.y <= slack:
+        return panel.bbox.y + panel.bbox.height / 2
+    return float(panel.bbox.y)
+
+
+def _area(panel: DetectedPanel) -> int:
+    return panel.bbox.width * panel.bbox.height
+
+
+def _overlap_area(a: DetectedPanel, b: DetectedPanel) -> int:
+    w = min(a.bbox.right, b.bbox.right) - max(a.bbox.x, b.bbox.x)
+    h = min(a.bbox.bottom, b.bbox.bottom) - max(a.bbox.y, b.bbox.y)
+    return max(0, w) * max(0, h)
 
 
 def _stacked(a: DetectedPanel, b: DetectedPanel) -> bool:

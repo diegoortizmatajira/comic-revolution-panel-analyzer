@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 KEY = "test-key"
 HEADERS = {"X-API-Key": KEY}
-BASE_VERSION = "projection@9+xycut@5"
+BASE_VERSION = "projection@9+xycut@6"
 
 
 def make_client(**kwargs: Any) -> TestClient:
