@@ -39,13 +39,14 @@ def _summary_row(name: str, extra: str, s: Summary) -> str:
     return (
         f"{name:<18}{extra:<9}{s.pages:>5}  {_num(s.precision_50):>7} {_num(s.recall_50):>6} "
         f"{_num(s.f1_50):>6} {_num(s.f1_75):>6}  {_num(s.order_accuracy):>6} "
-        f"{_num(s.page_accuracy):>8}  {_num(s.confidence_auc):>8}"
+        f"{_num(s.overlap_order_accuracy):>7} {_num(s.page_accuracy):>8}  "
+        f"{_num(s.confidence_auc):>8}"
     )
 
 
 _HEADER = (
     f"{'':<18}{'version':<9}{'pages':>5}  {'prec@50':>7} {'rec@50':>6} {'f1@50':>6} "
-    f"{'f1@75':>6}  {'order':>6} {'page_acc':>8}  {'conf_auc':>8}"
+    f"{'f1@75':>6}  {'order':>6} {'overlap':>7} {'page_acc':>8}  {'conf_auc':>8}"
 )
 
 
@@ -64,6 +65,7 @@ def to_text(
         "",
         "page_acc: every panel found (IoU>=0.5), nothing extra, same order.",
         "order: share of matched panel pairs read in the ground-truth order.",
+        "overlap: the same, only for pairs that overlap in the ground truth (insets, scenes).",
         "conf_auc: chance a correct page gets a higher sequence_confidence than a wrong one "
         "(0.5 = no signal, 1.0 = perfect).",
     ]

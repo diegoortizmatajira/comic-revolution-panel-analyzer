@@ -153,8 +153,8 @@ def test_the_analyzer_applies_the_refiner_and_reports_it_in_the_version() -> Non
 
     assert plain.panels[0].bbox.bottom == 430
     assert refined.panels[0].bbox.bottom == 460
-    assert plain.version == "fake@7+xycut@5"
-    assert refined.version == "fake@7+edge-snap@5+xycut@5"
+    assert plain.version == "fake@7+xycut@6"
+    assert refined.version == "fake@7+edge-snap@5+xycut@6"
 
 
 def slanted_top_page() -> NDArray[np.uint8]:

@@ -171,3 +171,45 @@ def test_columns_stay_columns_when_the_rest_has_no_horizontal_gutter() -> None:
     ]
     result = ordering.order(layout, ReadingDirection.LTR)
     assert positions(result.panels) == [(0, 0), (310, 0), (310, 610), (620, 0), (620, 410)]
+
+
+# The page from feedback sample abcec3d8: a full-bleed scene (4th) sits behind the second and third
+# panels' column, and its top edge is higher than the third panel's. Pixels of a 1952x3000 page.
+SCENE_BEHIND_INSETS = [
+    panel(80, 0, 1798, 438),  # 1: title strip
+    panel(80, 459, 755, 525),  # 2: inset, starts above the scene
+    panel(76, 921, 775, 507),  # 3: inset, inside the scene
+    panel(0, 534, 1952, 2112),  # 4: full-bleed scene
+    panel(45, 2574, 1827, 342),  # 5: bottom strip
+]
+
+
+def test_a_scene_behind_insets_reads_after_the_inset_that_starts_above_it() -> None:
+    result = ordering.order(list(reversed(SCENE_BEHIND_INSETS)), ReadingDirection.LTR)
+    assert positions(result.panels) == positions(tuple(SCENE_BEHIND_INSETS))
+
+
+def test_a_scene_that_starts_above_its_insets_is_still_read_first() -> None:
+    # Feedback sample 9ac0200d: the background starts at the top and the insets lie on its right.
+    layout = [
+        panel(0, 0, 1000, 1000),
+        panel(510, 370, 470, 145),
+        panel(515, 520, 460, 135),
+        panel(440, 655, 535, 110),
+    ]
+    result = ordering.order(list(reversed(layout)), ReadingDirection.LTR)
+    assert positions(result.panels) == positions(tuple(layout))
+
+
+def test_a_scene_whose_top_was_claimed_above_its_insets_still_reads_after_them() -> None:
+    # What the hybrid detector returns for abcec3d8 once captions are claimed: the scene's top
+    # edge now lies above the first inset's.
+    layout = [
+        panel(81, 0, 1798, 438),
+        panel(80, 459, 756, 526),
+        panel(76, 921, 774, 507),
+        panel(0, 399, 1952, 2246),
+        panel(667, 2570, 1204, 343),
+    ]
+    result = ordering.order(list(reversed(layout)), ReadingDirection.LTR)
+    assert [p.bbox.y for p in result.panels] == [0, 459, 921, 399, 2570]

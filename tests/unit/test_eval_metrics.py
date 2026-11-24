@@ -6,6 +6,7 @@ from app.evaluation.metrics import (
     iou,
     match,
     order_agreement,
+    overlap_order_agreement,
     score_page,
     summarize,
 )
@@ -128,3 +129,15 @@ def test_summarize_empty_has_no_numbers() -> None:
         "order_accuracy": None,
         "page_accuracy": None,
     }
+
+
+def test_overlap_order_only_counts_pairs_that_overlap_in_the_truth() -> None:
+    inset = NormalizedBox(0.1, 0.3, 0.3, 0.2)
+    scene = NormalizedBox(0.0, 0.2, 1.0, 0.7)  # covers the inset
+    apart = NormalizedBox(0.0, 0.95, 1.0, 0.05)
+    truth = [inset, scene, apart]
+    right = overlap_order_agreement([(0, 0), (1, 1), (2, 2)], truth)
+    swapped = overlap_order_agreement([(0, 1), (1, 0), (2, 2)], truth)
+    assert right == (1, 1)  # only the inset/scene pair overlaps
+    assert swapped == (0, 1)
+    assert overlap_order_agreement([(0, 0), (1, 2)], truth) == (0, 0)
