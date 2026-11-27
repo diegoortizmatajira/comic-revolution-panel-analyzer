@@ -17,6 +17,7 @@ splash page (no margin to sample) yields no panels.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -59,6 +60,9 @@ _CAPTION_TALLER = 3.0  # the panel below is at least this many times as tall
 _MAX_FRAME_TRIES = 6  # frame lines tried per region, longest first
 
 
+_SeamCache = dict[tuple[tuple[int, ...], bytes], "tuple[float, NDArray[np.int64]] | None"]
+
+
 @dataclass(slots=True)
 class _Frames:
     """Frame lines of the page and the rows already cut along them (per ``detect`` call)."""
@@ -66,6 +70,9 @@ class _Frames:
     lines: FrameLines
     cuts: list[int] = field(default_factory=list)
     page: NDArray[np.uint8] | None = None
+    # Seam found per region content (see ``_cheapest_seam``): the trial cuts of ``_cut_pays_off``
+    # split the same regions again and again, and the search for a seam is the costly step.
+    seams: _SeamCache = field(default_factory=dict)
 
 
 def _bleeds(frames: _Frames, region: _Region) -> bool:
@@ -651,7 +658,7 @@ class ProjectionPanelDetector:
                         self._split(mask, child, depth + 1, out, frames)
                     return
         if depth < self._max_depth:
-            halves = self._seam_split(sub)
+            halves = self._seam_split(sub, frames)
             if halves is not None:
                 for half in halves:
                     padded = np.zeros_like(mask)
@@ -702,7 +709,7 @@ class ProjectionPanelDetector:
         further (stacked panels with no gutter); a cut through one panel does neither.
         """
         y0, y1, x0, x1 = region
-        trial = _Frames(frames.lines, [*frames.cuts, cut], frames.page)
+        trial = _Frames(frames.lines, [*frames.cuts, cut], frames.page, frames.seams)
         pieces: list[_Region] = []
         self._split(mask, (y0, cut, x0, x1), depth + 1, pieces, trial)
         self._split(mask, (cut, y1, x0, x1), depth + 1, pieces, trial)
@@ -722,7 +729,7 @@ class ProjectionPanelDetector:
         touches_cut = any(abs(y - cut) <= 4 for cut in frames.cuts for y in (y0, y1))
         return touches_cut and frames.lines.sides(region) <= 1 and not _bleeds(frames, region)
 
-    def _seam_split(self, sub: Mask) -> tuple[Mask, Mask] | None:
+    def _seam_split(self, sub: Mask, frames: _Frames) -> tuple[Mask, Mask] | None:
         """Cut a region along a slanted gutter: the cheapest path through the content mask.
 
         Used only when no straight row/column gutter exists. The path may drift one pixel per
@@ -732,7 +739,7 @@ class ProjectionPanelDetector:
         best: tuple[float, Mask, Mask] | None = None
         for transpose in (False, True):  # False: seam runs left to right, cutting rows apart
             oriented = sub.T if transpose else sub
-            found = self._cheapest_seam(oriented)
+            found = self._cheapest_seam(oriented, frames.seams)
             if found is None:
                 continue
             cost, upper, lower = found
@@ -740,26 +747,62 @@ class ProjectionPanelDetector:
                 best = (cost, upper.T if transpose else upper, lower.T if transpose else lower)
         return None if best is None else (best[1], best[2])
 
-    def _cheapest_seam(self, sub: Mask) -> tuple[float, Mask, Mask] | None:
+    def _cheapest_seam(self, sub: Mask, cache: _SeamCache) -> tuple[float, Mask, Mask] | None:
+        key = (sub.shape, hashlib.blake2b(np.ascontiguousarray(sub), digest_size=16).digest())
+        if key not in cache:
+            cache[key] = self._accepted_seam(sub)
+        found = cache[key]
+        if found is None:
+            return None
+        cost, path = found
+        return (cost, *self._sides(sub, path))
+
+    def _accepted_seam(self, sub: Mask) -> tuple[float, NDArray[np.int64]] | None:
+        """The seam of ``sub`` if it leaves enough content on both sides of it, else None."""
+        found = self._seam_path(sub)
+        if found is None:
+            return None
+        cost, path = found
+        upper, lower = self._sides(sub, path)
+        floor = self._min_seam_side_ratio * sub.sum()
+        return None if upper.sum() < floor or lower.sum() < floor else (cost, path)
+
+    @staticmethod
+    def _sides(sub: Mask, path: NDArray[np.int64]) -> tuple[Mask, Mask]:
+        rows = np.arange(sub.shape[0])[:, None]
+        return sub & (rows < path[None, :]), sub & (rows > path[None, :])
+
+    def _seam_path(self, sub: Mask) -> tuple[float, NDArray[np.int64]] | None:
+        """Cost (share of the path on content) and rows of the cheapest acceptable seam."""
         height, width = sub.shape
         clearance = self._min_gutter(height) | 1
         blocked = cv2.dilate(sub.astype(np.uint8), np.ones((clearance, 1), np.uint8)) > 0
-        cost = blocked.astype(np.float32)
-        total = np.zeros((height, width), dtype=np.float32)
-        step = np.zeros((height, width), dtype=np.int8)
-        total[:, 0] = cost[:, 0]
+        # A column that is blocked top to bottom costs the seam at least one crossing, and the
+        # seam is accepted only with few of them, so such a region needs no search at all.
+        if int(blocked.all(axis=0).sum()) > self._seam_content_ratio * width:
+            return None
+        # Column-major, so each step of the search reads and writes contiguous memory.
+        cost = np.ascontiguousarray(blocked.T, dtype=np.float32)
+        total = np.empty((width, height), dtype=np.float32)
+        step = np.zeros((width, height), dtype=np.int8)
+        total[0] = cost[0]
         inf = np.float32(np.inf)
+        tie = np.float32(1e-3)  # prefer going straight on ties, so a straight gutter stays straight
+        padded = np.full(height + 2, inf, dtype=np.float32)
         for x in range(1, width):
             if x % 64 == 0:
                 check_deadline()
-            prev = total[:, x - 1]
-            up = np.concatenate(([inf], prev[:-1]))
-            down = np.concatenate((prev[1:], [inf]))
-            # Prefer going straight on ties, so a straight gutter stays straight.
-            stacked = np.stack((prev, up + 1e-3, down + 1e-3))
-            choice = stacked.argmin(axis=0)
-            total[:, x] = stacked.min(axis=0) + cost[:, x]
-            step[:, x] = choice
+            prev = total[x - 1]
+            padded[1:-1] = prev
+            up, down = padded[:-2], padded[2:]  # the seam came from the row above / below
+            side = np.minimum(up, down)
+            side += tie
+            moved = side < prev
+            step[x] = np.where(moved, np.where(up <= down, 1, 2), 0)
+            np.minimum(prev, side, out=total[x])
+            total[x] += cost[x]
+        total = total.T
+        step = step.T
         end = int(total[:, -1].argmin())
         if total[end, -1] > self._seam_content_ratio * width * 10:  # blocked pixels allowed
             return None
@@ -779,14 +822,7 @@ class ProjectionPanelDetector:
             deviation = float(np.abs(path - (slope * xs + intercept)).max())
             if deviation > self._seam_straightness * width:
                 return None
-        rows = np.arange(height)[:, None]
-        upper = sub & (rows < path[None, :])
-        lower = sub & (rows > path[None, :])
-        area = sub.sum()
-        floor = self._min_seam_side_ratio * area
-        if upper.sum() < floor or lower.sum() < floor:
-            return None
-        return float(blocked[path, np.arange(width)].mean()), upper, lower
+        return blocked_ratio, path
 
     def _min_gutter(self, length: int) -> int:
         return max(2, round(length * self._min_gutter_ratio))

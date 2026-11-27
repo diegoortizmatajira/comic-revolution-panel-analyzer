@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 from app.domain.models import BoundingBox, DetectedPanel, ReadingDirection
 from app.services.detection.frames import FrameLines
-from app.services.detection.projection import ProjectionPanelDetector, _Frames, _has_band
+from app.services.detection.projection import (
+    ProjectionPanelDetector,
+    _Frames,
+    _has_band,
+    _SeamCache,
+)
 from app.services.image.decoder import ImageLimits, decode_image
 from app.services.ordering.xy_cut import XYCutOrdering
 
@@ -405,3 +410,39 @@ def test_unframed_lettering_and_a_thin_panel_are_not_joined_to_the_panel_below()
         tall,
         (310, 900, 82, 535),
     ]
+
+
+def _slanted_gutter_mask() -> np.ndarray:
+    """Two blocks of content with a clean gutter between them, slanted one row per 20 columns."""
+    height, width = 200, 300
+    mask = np.zeros((height, width), dtype=bool)
+    gutter = 90 + np.arange(width) // 20
+    rows = np.arange(height)[:, None]
+    mask[:] = (rows < gutter[None, :] - 6) | (rows > gutter[None, :] + 6)
+    return mask
+
+
+def test_seam_search_is_done_once_per_region_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    searches = 0
+    original = ProjectionPanelDetector._seam_path
+
+    def counting(self: ProjectionPanelDetector, sub: np.ndarray) -> object:
+        nonlocal searches
+        searches += 1
+        return original(self, sub)
+
+    monkeypatch.setattr(ProjectionPanelDetector, "_seam_path", counting)
+    cache: _SeamCache = {}
+    first = detector._cheapest_seam(_slanted_gutter_mask(), cache)
+    second = detector._cheapest_seam(_slanted_gutter_mask().copy(), cache)  # same content
+    assert first is not None
+    assert second is not None
+    assert searches == 1
+    assert np.array_equal(first[1], second[1])
+    assert np.array_equal(first[2], second[2])
+
+
+def test_region_crossed_by_many_full_height_lines_has_no_seam() -> None:
+    mask = _slanted_gutter_mask()
+    mask[:, ::10] = True  # a line top to bottom every 10 columns: no seam can avoid them
+    assert detector._cheapest_seam(mask, {}) is None
