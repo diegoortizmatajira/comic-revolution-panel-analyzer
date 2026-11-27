@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
 from app.api.deps import AuthDep, ContainerDep  # noqa: TC001
+from app.core.deadline import time_limit
 from app.core.errors import FeedbackDisabledError, ImageTooLargeError
 from app.core.options import OVERRIDABLE
 from app.domain.models import ReadingDirection
@@ -47,11 +48,15 @@ async def _analyze(
     )
 
     def work() -> AnalyzeResponse:
-        image = decode_image(data, container.limits)
-        analyzer = container.pipeline.analyzer(overrides) if overrides else container.analyzer
-        return AnalyzeResponse.from_result(analyzer.analyze(image, direction))
+        with time_limit(container.settings.analysis_timeout_seconds):
+            image = decode_image(data, container.limits)
+            analyzer = container.pipeline.analyzer(overrides) if overrides else container.analyzer
+            return AnalyzeResponse.from_result(analyzer.analyze(image, direction))
 
-    return await run_in_threadpool(work)  # CPU-bound: keep the event loop free
+    # CPU-bound: keep the event loop free, and run only a few at a time so that a burst of
+    # requests (or a few hard pages) cannot starve every other one of the CPU.
+    async with container.analysis_slots:
+        return await run_in_threadpool(work)
 
 
 @router.post("/analyze", response_model=AnalyzeResponse, responses=_ERRORS)

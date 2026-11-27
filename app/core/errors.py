@@ -45,6 +45,11 @@ class ImageFetchTimeoutError(AppError):
     status_code = 504
 
 
+class AnalysisTimeoutError(AppError):
+    code = "analysis_timeout"
+    status_code = 504
+
+
 class UnauthorizedError(AppError):
     code = "unauthorized"
     status_code = 401

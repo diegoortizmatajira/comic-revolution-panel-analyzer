@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,7 @@ class Container:
     limits: ImageLimits
     api_keys: ApiKeyStore
     rate_limiter: RateLimiter
+    analysis_slots: asyncio.Semaphore  # bounds the analyses running at once
     feedback: FeedbackStore | None = None  # None: PANELS_FEEDBACK_DIR is not set
 
 
@@ -60,6 +62,7 @@ def build_container(settings: Settings) -> Container:
         ),
         api_keys=StaticApiKeyStore(settings.parsed_api_keys()),
         rate_limiter=SlidingWindowRateLimiter(settings.rate_limit_per_minute),
+        analysis_slots=asyncio.Semaphore(settings.max_concurrent_analyses),
         feedback=(
             None
             if settings.feedback_dir is None

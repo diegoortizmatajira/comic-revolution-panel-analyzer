@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     max_image_bytes: int = Field(default=15 * 1024 * 1024, gt=0)
     max_image_pixels: int = Field(default=40_000_000, gt=0)
 
+    # CPU time one analysis may use before it is stopped (504). Work in a thread cannot be
+    # cancelled from outside, so without a limit a hard page keeps a core busy until it ends.
+    analysis_timeout_seconds: float = Field(default=30.0, gt=0)
+    # Analyses running at once; the rest wait their turn instead of competing for the CPU.
+    max_concurrent_analyses: int = Field(default=2, gt=0)
+
     url_fetch_timeout_seconds: float = Field(default=10.0, gt=0)
     url_max_redirects: int = Field(default=3, ge=0)
     allow_private_urls: bool = False  # development only

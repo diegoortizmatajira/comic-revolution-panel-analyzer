@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 
+from app.core.deadline import check_deadline
 from app.domain.models import BoundingBox, DetectedPanel, Detection
 from app.services.detection.content import (
     content_mask,
@@ -620,6 +621,7 @@ class ProjectionPanelDetector:
     def _split(
         self, mask: Mask, region: _Region, depth: int, out: list[_Region], frames: _Frames
     ) -> None:
+        check_deadline()
         y0, y1, x0, x1 = region
         sub = mask[y0:y1, x0:x1]
 
@@ -748,6 +750,8 @@ class ProjectionPanelDetector:
         total[:, 0] = cost[:, 0]
         inf = np.float32(np.inf)
         for x in range(1, width):
+            if x % 64 == 0:
+                check_deadline()
             prev = total[:, x - 1]
             up = np.concatenate(([inf], prev[:-1]))
             down = np.concatenate((prev[1:], [inf]))

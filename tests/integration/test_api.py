@@ -1,4 +1,5 @@
 import base64
+import time
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -284,3 +285,35 @@ def test_hybrid_falls_back_to_the_ml_detector_and_reports_it(
     assert body["version"].endswith("+xycut@6")
     assert [p["order"] for p in body["panels"]] == [1, 2, 3, 4]
     assert abs(body["panels"][0]["bbox"]["x"] - 40) <= 20
+
+
+def test_a_page_that_takes_too_long_is_stopped_with_504() -> None:
+    """A ruled grid sends the seam search into a very long recursion; the limit must end it."""
+    settings = Settings(
+        api_keys=KEY,
+        analysis_timeout_seconds=1,
+        log_json=False,
+        rate_limit_per_minute=1000,
+        _env_file=None,
+    )
+    page = np.full((3000, 2000, 3), 255, np.uint8)
+    for at in range(0, 3000, 300):
+        page[at : at + 3] = 0
+    for at in range(0, 2000, 300):
+        page[:, at : at + 3] = 0
+    import io  # noqa: PLC0415
+
+    from PIL import Image  # noqa: PLC0415
+
+    buf = io.BytesIO()
+    Image.fromarray(page).save(buf, format="PNG")
+    with TestClient(create_app(settings)) as c:
+        started = time.perf_counter()
+        r = c.post(
+            "/v1/panels/analyze/upload",
+            headers=HEADERS,
+            files={"file": ("p.png", buf.getvalue(), "image/png")},
+        )
+    assert r.status_code == 504
+    assert r.json()["code"] == "analysis_timeout"
+    assert time.perf_counter() - started < 10
